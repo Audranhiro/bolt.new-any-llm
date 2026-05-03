@@ -4,9 +4,10 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://intervenant-rouen.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("BACKEND_URL") or os.environ.get("REACT_APP_BACKEND_URL") or "http://localhost:8000"
+BASE_URL = BASE_URL.rstrip("/")
 # Read frontend .env if env var not set in this process
-if "REACT_APP_BACKEND_URL" not in os.environ:
+if "BACKEND_URL" not in os.environ and "REACT_APP_BACKEND_URL" not in os.environ:
     try:
         with open("/app/frontend/.env") as f:
             for line in f:

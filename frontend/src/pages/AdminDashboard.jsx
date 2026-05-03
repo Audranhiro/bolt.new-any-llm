@@ -34,6 +34,10 @@ export default function AdminDashboard() {
     await api.post(`/admin/intervenants/${id}/toggle-hidden`);
     await reload();
   }
+  async function setPlan(id, nextPlan) {
+    await api.post(`/admin/intervenants/${id}/set-plan`, { plan: nextPlan });
+    await reload();
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-6" data-testid="admin-dashboard">
@@ -50,7 +54,7 @@ export default function AdminDashboard() {
           <table className="w-full text-base">
             <thead>
               <tr className="bg-[#F9F8F6]">
-                <Th>Nom</Th><Th>Ville</Th><Th>Diplôme</Th><Th>Statut</Th><Th>Dernière MAJ</Th><Th>Actions</Th>
+                <Th>Nom</Th><Th>Ville</Th><Th>Diplôme</Th><Th>Statut</Th><Th>Plan</Th><Th>Dernière MAJ</Th><Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
@@ -69,6 +73,11 @@ export default function AdminDashboard() {
                       : i.available_this_week ? <span className="text-[#2D6A4F] font-semibold">Cette semaine</span>
                       : <span className="text-[#4B5563]">Non dispo</span>}
                   </Td>
+                  <Td>
+                    {i.plan === "premium"
+                      ? <span className="inline-flex items-center rounded-full bg-[#2D6A4F] text-white px-3 py-1 text-sm font-semibold">Premium</span>
+                      : <span className="inline-flex items-center rounded-full bg-[#F9F8F6] border border-[#E5E7EB] px-3 py-1 text-sm font-semibold">Free</span>}
+                  </Td>
                   <Td className="text-sm">{i.last_availability_update ? new Date(i.last_availability_update).toLocaleString("fr-FR") : "—"}</Td>
                   <Td>
                     <div className="flex flex-wrap gap-2">
@@ -77,6 +86,13 @@ export default function AdminDashboard() {
                       </button>
                       <button onClick={() => toggleHidden(i.id)} data-testid={`admin-hide-${i.id}`} className="px-3 py-2 rounded-lg border-2 border-[#E5E7EB] text-sm font-semibold inline-flex items-center gap-1">
                         {i.hidden ? <><Eye className="w-4 h-4" /> Afficher</> : <><EyeOff className="w-4 h-4" /> Masquer</>}
+                      </button>
+                      <button
+                        onClick={() => setPlan(i.id, i.plan === "premium" ? "free" : "premium")}
+                        data-testid={`admin-plan-${i.id}`}
+                        className="px-3 py-2 rounded-lg border-2 border-[#E5E7EB] text-sm font-semibold"
+                      >
+                        {i.plan === "premium" ? "Passer en Free" : "Passer en Premium"}
                       </button>
                     </div>
                   </Td>
