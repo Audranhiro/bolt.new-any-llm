@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
-import { MapPin, BadgeCheck, Home, Calendar, ChevronRight } from "lucide-react";
+import { MapPin, BadgeCheck, Home, Calendar, ChevronRight, Star } from "lucide-react";
 
 export default function IntervenantCard({ i }) {
   const hasHome = (i.intervention_places || []).includes("domicile");
+  const isPremium = i.plan === "premium" || i.subscription_status === "active";
   return (
     <article
       className="bg-white border-2 border-[#E5E7EB] rounded-2xl p-5 md:p-6 hover:border-[#2D6A4F] transition-colors"
@@ -10,9 +11,16 @@ export default function IntervenantCard({ i }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h3 className="font-heading text-xl md:text-2xl font-bold text-[#1C1917]">
-            {i.first_name} {i.last_name}
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-heading text-xl md:text-2xl font-bold text-[#1C1917]">
+              {i.first_name} {i.last_name}
+            </h3>
+            {isPremium && (
+              <span className="inline-flex items-center gap-1 bg-[#F8E7A1] border border-[#E0B84F] text-[#1C1917] text-sm font-semibold px-3 py-1 rounded-full">
+                <Star className="w-4 h-4" /> Premium
+              </span>
+            )}
+          </div>
           <div className="mt-1 flex items-center gap-2 text-[#4B5563]">
             <MapPin className="w-4 h-4" />
             <span className="text-base">{i.city}</span>
