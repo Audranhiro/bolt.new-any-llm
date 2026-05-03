@@ -23,6 +23,11 @@ export default function IntervenantCard({ i }) {
                 <BadgeCheck className="w-4 h-4" /> Diplôme vérifié
               </span>
             )}
+            {i.plan === "premium" && (
+              <span className="inline-flex items-center gap-1 bg-[#1B4332] text-white text-sm font-semibold px-3 py-1 rounded-full">
+                Premium
+              </span>
+            )}
             {i.available_today && (
               <span className="inline-flex items-center gap-1 bg-[#B85042] text-white text-sm font-semibold px-3 py-1 rounded-full">
                 <Calendar className="w-4 h-4" /> Aujourd'hui

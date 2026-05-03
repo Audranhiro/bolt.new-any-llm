@@ -25,6 +25,21 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+CORS_ORIGINS_RAW = os.environ.get("CORS_ORIGINS", "")
+DEFAULT_LOCAL_CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+if CORS_ORIGINS_RAW.strip():
+    CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
+elif os.environ.get("FRONTEND_URL"):
+    CORS_ORIGINS = [FRONTEND_URL]
+else:
+    CORS_ORIGINS = DEFAULT_LOCAL_CORS_ORIGINS
+
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
+COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax" if not COOKIE_SECURE else "none").lower()
+if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+    COOKIE_SAMESITE = "lax" if not COOKIE_SECURE else "none"
+
 app = FastAPI(title="APA Connect API")
 api_router = APIRouter(prefix="/api")
 
@@ -93,7 +108,7 @@ async def require_intervenant(user: dict = Depends(get_current_user)) -> dict:
 def set_auth_cookie(response: Response, token: str):
     response.set_cookie(
         key="access_token", value=token, httponly=True,
-        secure=True, samesite="none", max_age=604800, path="/"
+        secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=604800, path="/"
     )
 
 # ---------- Models ----------
@@ -119,6 +134,9 @@ class IntervenantProfileIn(BaseModel):
     bio: Optional[str] = ""
     lat: Optional[float] = None
     lng: Optional[float] = None
+
+class AdminPlanUpdateIn(BaseModel):
+    plan: str
 
 class AvailabilityIn(BaseModel):
     # dict: date(YYYY-MM-DD) -> {"morning": bool, "afternoon": bool}
@@ -170,6 +188,11 @@ async def register(data: RegisterIn, response: Response):
         "lat": None,
         "lng": None,
         "created_at": now_utc().isoformat(),
+        "plan": "free",
+        "subscription_status": "inactive",
+        "premium_until": None,
+        "stripe_customer_id": None,
+        "stripe_subscription_id": None,
     }
     await db.intervenants.insert_one(profile)
 
@@ -312,6 +335,9 @@ def public_intervenant(profile: dict) -> dict:
         "lat": profile.get("lat"),
         "lng": profile.get("lng"),
         "bio": profile.get("bio", ""),
+        "plan": profile.get("plan", "free"),
+        "subscription_status": profile.get("subscription_status", "inactive"),
+        "premium_until": profile.get("premium_until"),
     }
 
 @api_router.get("/intervenants")
@@ -403,6 +429,23 @@ async def admin_toggle_hidden(intervenant_id: str, _: dict = Depends(require_adm
         raise HTTPException(status_code=404, detail="Intervenant introuvable")
     await db.intervenants.update_one({"id": intervenant_id}, {"$set": {"hidden": not p.get("hidden", False)}})
     return {"ok": True, "hidden": not p.get("hidden", False)}
+
+@api_router.post("/admin/intervenants/{intervenant_id}/set-plan")
+async def admin_set_plan(intervenant_id: str, data: AdminPlanUpdateIn, _: dict = Depends(require_admin)):
+    plan = (data.plan or "").lower()
+    if plan not in {"free", "premium"}:
+        raise HTTPException(status_code=400, detail="Plan invalide")
+    sub_status = "active" if plan == "premium" else "inactive"
+    premium_until = None
+    if plan == "premium":
+        premium_until = (now_utc() + timedelta(days=3650)).isoformat()
+    res = await db.intervenants.update_one(
+        {"id": intervenant_id},
+        {"$set": {"plan": plan, "subscription_status": sub_status, "premium_until": premium_until}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    return {"ok": True, "plan": plan, "subscription_status": sub_status, "premium_until": premium_until}
 
 @api_router.get("/admin/callbacks")
 async def admin_list_callbacks(_: dict = Depends(require_admin)):
@@ -503,6 +546,11 @@ async def seed_fake_intervenants():
             "lng": lng,
             "created_at": now_utc().isoformat(),
             "seed": True,
+            "plan": "free",
+            "subscription_status": "inactive",
+            "premium_until": None,
+            "stripe_customer_id": None,
+            "stripe_subscription_id": None,
         }
         await db.intervenants.insert_one(doc)
     logger.info("Seeded 5 fake intervenants around Rouen")
@@ -525,8 +573,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_origin_regex=".*",
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
