@@ -1,0 +1,75 @@
+{
+  "theme": "Light",
+  "archetype": "1 - Organic & Earthy",
+  "target_audience": "Seniors (Patients) and Healthcare Professionals (APA Practitioners)",
+  "language": "French only",
+  "typography": {
+    "headings": {
+      "font": "Work Sans, sans-serif",
+      "scale": "text-2xl to text-5xl",
+      "weight": "font-bold",
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "font": "Manrope, sans-serif",
+      "base_size": "text-lg",
+      "color": "text-[#1C1917]"
+    }
+  },
+  "colors": {
+    "background_base": "#F9F8F6",
+    "background_surface": "#FFFFFF",
+    "primary": "#2D6A4F",
+    "primary_hover": "#1B4332",
+    "secondary": "#74A57F",
+    "text_main": "#1C1917",
+    "text_muted": "#4B5563",
+    "accent_warm": "#B85042",
+    "border_subtle": "#E5E7EB"
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing, High Contrast, Large Touch Targets (Senior-Friendly Design)",
+    "container_padding": "p-6 md:p-12 lg:p-16",
+    "button_sizing": "min-h-[56px] px-8 text-lg font-semibold rounded-2xl",
+    "input_sizing": "min-h-[56px] px-4 text-lg rounded-xl border-2 border-[#E5E7EB] focus:border-[#2D6A4F]",
+    "gap_strategy": "Wide gaps (gap-8 to gap-12) to reduce cognitive load and prevent misclicks"
+  },
+  "component_guidelines": {
+    "buttons": "Use solid primary color (#2D6A4F) for main CTAs. Must be huge (min-h-[56px]) for easy tapping. Labels must be explicit (e.g., 'Je cherche un intervenant APA' instead of just 'Chercher').",
+    "cards": "Flat solid background (bg-white) over the bone-white base. Use 1px border (border-[#E5E7EB]) and rounded-2xl. Soft or no shadows to maintain a clean, physical paper feel.",
+    "forms": "Labels MUST be placed outside and above inputs. High contrast borders on inputs. Explicit error states in warm accent color (#B85042).",
+    "map": "Leaflet + OpenStreetMap. Use clear, large custom markers.",
+    "accessibility": "WCAG AA+ contrast required (7:1 ratio preferred). `data-testid` attributes are MANDATORY on all interactive elements. Focus states must have a highly visible offset ring."
+  },
+  "media": [
+    {
+      "category": "hero_background",
+      "url": "https://static.prod-images.emergentagent.com/jobs/a2058971-8d12-4428-a8a9-e1fdcf9eb881/images/c39ec8ab0c63d7dff170555e0507d7af256cb1f553573abef25a07a0e0462fc7.png",
+      "description": "Senior exercising with a caring professional in a bright environment"
+    },
+    {
+      "category": "abstract_shape_bg",
+      "url": "https://static.prod-images.emergentagent.com/jobs/a2058971-8d12-4428-a8a9-e1fdcf9eb881/images/6221896be136085ebd5ac51a15e6d65515c8741cb3c7e4397acab45002ac2e37.png",
+      "description": "Calm, organic shapes in earthy tones for supportive backgrounds"
+    },
+    {
+      "category": "practitioner_portrait_placeholder",
+      "url": "https://images.pexels.com/photos/8460157/pexels-photo-8460157.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Friendly male healthcare professional portrait"
+    }
+  ],
+  "pages_and_features": {
+    "home": "Two massive primary CTAs: 'Je cherche un intervenant APA' (Patient) and 'Je suis intervenant APA' (Pro). Clean, reassuring hero section using the hero_background.",
+    "patient_search": "Search bar (ville). Filters: 'Aujourd'hui', 'Cette semaine', 'À domicile', 'Diplôme vérifié'. Desktop: 2-column layout (Leaflet Map on right, scrollable practitioner cards on left). Mobile: Stacked with toggle for map/list.",
+    "practitioner_card": "Information displayed: Nom, Ville, Publics accompagnés, Lieux d'intervention, Disponibilités. Prominent CTA button: 'Demander un rappel'.",
+    "callback_form": "Fields: Prénom, Téléphone/Email, Ville, Besoin général, Message optionnel. MUST prominently display disclaimer: 'Ne renseignez pas d'informations médicales détaillées.'",
+    "practitioner_dashboard": "Profile setup (Ville, zone, diplôme, publics, lieux). Availability grid by half-days. Clear toggle buttons: 'Confirmer disponibilités', 'Garder disponibilités', 'Indisponible'.",
+    "admin_dashboard": "Simple datatable layout. Features: list of practitioners, validate diploma button, hide practitioner button, view callbacks, see last updated timestamps."
+  },
+  "technical_instructions": {
+    "icons": "Use lucide-react. Keep them simple, large (w-8 h-8 for main actions), and always paired with text.",
+    "map_library": "react-leaflet with standard OpenStreetMap tiles.",
+    "forms_library": "react-hook-form with customized shadcn/ui. Remove overly complex interactions.",
+    "animations": "Minimal to none. Seniors can find heavy motion disorienting. Focus on clear state changes (hover, active, focus) rather than moving elements."
+  }
+}
