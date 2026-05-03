@@ -1,89 +1,532 @@
-from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
-
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+import os
+import uuid
+import logging
+import bcrypt
+import jwt
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional, Dict, Any
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, EmailStr
+
+# ---------- Config ----------
+JWT_ALGORITHM = "HS256"
+JWT_SECRET = os.environ["JWT_SECRET"]
+
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
-
-# Create a router with the /api prefix
+app = FastAPI(title="APA Connect API")
 api_router = APIRouter(prefix="/api")
 
+logger = logging.getLogger("apa")
+logging.basicConfig(level=logging.INFO)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# ---------- Helpers ----------
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
-# Add your routes to the router instead of directly to app
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except Exception:
+        return False
+
+def create_access_token(user_id: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": now_utc() + timedelta(days=7),
+        "type": "access",
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def monday_of_week(d: Optional[datetime] = None) -> str:
+    d = d or now_utc()
+    monday = d.date() - timedelta(days=d.weekday())
+    return monday.isoformat()
+
+def today_iso() -> str:
+    return now_utc().date().isoformat()
+
+async def get_current_user(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Non authentifié")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expirée")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalide")
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Utilisateur introuvable")
+    return user
+
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé à l'administrateur")
+    return user
+
+async def require_intervenant(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("role") != "intervenant":
+        raise HTTPException(status_code=403, detail="Accès réservé à l'intervenant")
+    return user
+
+def set_auth_cookie(response: Response, token: str):
+    response.set_cookie(
+        key="access_token", value=token, httponly=True,
+        secure=True, samesite="none", max_age=604800, path="/"
+    )
+
+# ---------- Models ----------
+class RegisterIn(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str
+    last_name: str
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+class IntervenantProfileIn(BaseModel):
+    first_name: str
+    last_name: str
+    city: str
+    zone: str = ""
+    diploma: str = ""
+    publics: List[str] = []
+    intervention_places: List[str] = []  # e.g. "domicile", "cabinet", "exterieur", "salle"
+    phone: Optional[str] = ""
+    bio: Optional[str] = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+class AvailabilityIn(BaseModel):
+    # dict: date(YYYY-MM-DD) -> {"morning": bool, "afternoon": bool}
+    availability: Dict[str, Dict[str, bool]]
+
+class CallbackIn(BaseModel):
+    intervenant_id: str
+    first_name: str
+    contact: str
+    city: str
+    need: str
+    message: Optional[str] = ""
+
+# ---------- Auth endpoints ----------
+@api_router.post("/auth/register")
+async def register(data: RegisterIn, response: Response):
+    email = data.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "email": email,
+        "password_hash": hash_password(data.password),
+        "role": "intervenant",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.users.insert_one(user_doc)
+
+    # create empty intervenant profile
+    profile = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "first_name": data.first_name,
+        "last_name": data.last_name,
+        "city": "",
+        "zone": "",
+        "diploma": "",
+        "diploma_verified": False,
+        "publics": [],
+        "intervention_places": [],
+        "availability": {},
+        "availability_week": "",
+        "availability_confirmed_at": None,
+        "last_availability_update": None,
+        "hidden": False,
+        "phone": "",
+        "bio": "",
+        "lat": None,
+        "lng": None,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.intervenants.insert_one(profile)
+
+    token = create_access_token(user_id, "intervenant")
+    set_auth_cookie(response, token)
+    return {"id": user_id, "email": email, "role": "intervenant", "token": token}
+
+@api_router.post("/auth/login")
+async def login(data: LoginIn, response: Response):
+    email = data.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    token = create_access_token(user["id"], user["role"])
+    set_auth_cookie(response, token)
+    return {"id": user["id"], "email": user["email"], "role": user["role"], "token": token}
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    return {"ok": True}
+
+@api_router.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    return user
+
+# ---------- Intervenant (self) endpoints ----------
+@api_router.get("/intervenants/me")
+async def get_my_profile(user: dict = Depends(require_intervenant)):
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profil introuvable")
+    return profile
+
+@api_router.put("/intervenants/me")
+async def update_my_profile(data: IntervenantProfileIn, user: dict = Depends(require_intervenant)):
+    update = data.model_dump()
+    update["updated_at"] = now_utc().isoformat()
+    await db.intervenants.update_one({"user_id": user["id"]}, {"$set": update})
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    return profile
+
+@api_router.post("/intervenants/me/availability")
+async def set_availability(data: AvailabilityIn, user: dict = Depends(require_intervenant)):
+    """Confirm availability for this week."""
+    week = monday_of_week()
+    await db.intervenants.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "availability": data.availability,
+            "availability_week": week,
+            "availability_confirmed_at": now_utc().isoformat(),
+            "last_availability_update": now_utc().isoformat(),
+        }}
+    )
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    return profile
+
+@api_router.post("/intervenants/me/keep-availability")
+async def keep_availability(user: dict = Depends(require_intervenant)):
+    """Re-confirm existing availability for this week."""
+    week = monday_of_week()
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profil introuvable")
+
+    # Shift availability dates to this week using previous pattern (weekday based)
+    prev_av = profile.get("availability") or {}
+    new_av: Dict[str, Dict[str, bool]] = {}
+    base = datetime.fromisoformat(week).date()
+    # Map weekday -> slots (first occurrence wins)
+    weekday_map: Dict[int, Dict[str, bool]] = {}
+    for date_str, slots in prev_av.items():
+        try:
+            d = datetime.fromisoformat(date_str).date()
+            weekday_map.setdefault(d.weekday(), slots)
+        except Exception:
+            continue
+    for i in range(7):
+        d = base + timedelta(days=i)
+        if i in weekday_map:
+            new_av[d.isoformat()] = weekday_map[i]
+
+    await db.intervenants.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "availability": new_av,
+            "availability_week": week,
+            "availability_confirmed_at": now_utc().isoformat(),
+            "last_availability_update": now_utc().isoformat(),
+        }}
+    )
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    return profile
+
+@api_router.post("/intervenants/me/unavailable")
+async def mark_unavailable(user: dict = Depends(require_intervenant)):
+    """Mark as unavailable this week."""
+    await db.intervenants.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "availability": {},
+            "availability_week": "",
+            "availability_confirmed_at": None,
+            "last_availability_update": now_utc().isoformat(),
+        }}
+    )
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    return profile
+
+# ---------- Public endpoints ----------
+def is_available_this_week(profile: dict) -> bool:
+    return profile.get("availability_week") == monday_of_week() and bool(profile.get("availability"))
+
+def is_available_today(profile: dict) -> bool:
+    if not is_available_this_week(profile):
+        return False
+    slots = (profile.get("availability") or {}).get(today_iso())
+    if not slots:
+        return False
+    return bool(slots.get("morning") or slots.get("afternoon"))
+
+def public_intervenant(profile: dict) -> dict:
+    return {
+        "id": profile["id"],
+        "first_name": profile.get("first_name", ""),
+        "last_name": profile.get("last_name", ""),
+        "city": profile.get("city", ""),
+        "zone": profile.get("zone", ""),
+        "diploma": profile.get("diploma", ""),
+        "diploma_verified": profile.get("diploma_verified", False),
+        "publics": profile.get("publics", []),
+        "intervention_places": profile.get("intervention_places", []),
+        "availability": profile.get("availability", {}) if is_available_this_week(profile) else {},
+        "availability_week": profile.get("availability_week", ""),
+        "availability_confirmed_at": profile.get("availability_confirmed_at"),
+        "last_availability_update": profile.get("last_availability_update"),
+        "available_this_week": is_available_this_week(profile),
+        "available_today": is_available_today(profile),
+        "lat": profile.get("lat"),
+        "lng": profile.get("lng"),
+        "bio": profile.get("bio", ""),
+    }
+
+@api_router.get("/intervenants")
+async def list_intervenants(
+    city: Optional[str] = None,
+    available_today: bool = False,
+    available_week: bool = False,
+    home: bool = False,
+    verified: bool = False,
+):
+    query = {"hidden": {"$ne": True}}
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if home:
+        query["intervention_places"] = {"$in": ["domicile"]}
+    if verified:
+        query["diploma_verified"] = True
+
+    cursor = db.intervenants.find(query, {"_id": 0})
+    results = []
+    async for p in cursor:
+        pub = public_intervenant(p)
+        if available_today and not pub["available_today"]:
+            continue
+        if available_week and not pub["available_this_week"]:
+            continue
+        results.append(pub)
+    return results
+
+@api_router.get("/intervenants/{intervenant_id}")
+async def get_intervenant(intervenant_id: str):
+    p = await db.intervenants.find_one({"id": intervenant_id, "hidden": {"$ne": True}}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    return public_intervenant(p)
+
+# ---------- Callbacks ----------
+@api_router.post("/callbacks")
+async def create_callback(data: CallbackIn):
+    p = await db.intervenants.find_one({"id": data.intervenant_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "intervenant_id": data.intervenant_id,
+        "intervenant_name": f"{p.get('first_name','')} {p.get('last_name','')}".strip(),
+        "first_name": data.first_name,
+        "contact": data.contact,
+        "city": data.city,
+        "need": data.need,
+        "message": data.message or "",
+        "status": "new",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.callbacks.insert_one(doc)
+    return {"id": doc["id"], "ok": True}
+
+# ---------- Admin ----------
+@api_router.get("/admin/intervenants")
+async def admin_list_intervenants(_: dict = Depends(require_admin)):
+    cursor = db.intervenants.find({}, {"_id": 0})
+    out = []
+    async for p in cursor:
+        out.append({
+            **p,
+            "available_this_week": is_available_this_week(p),
+            "available_today": is_available_today(p),
+        })
+    return out
+
+@api_router.post("/admin/intervenants/{intervenant_id}/validate-diploma")
+async def admin_validate_diploma(intervenant_id: str, _: dict = Depends(require_admin)):
+    res = await db.intervenants.update_one({"id": intervenant_id}, {"$set": {"diploma_verified": True}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    return {"ok": True}
+
+@api_router.post("/admin/intervenants/{intervenant_id}/unvalidate-diploma")
+async def admin_unvalidate_diploma(intervenant_id: str, _: dict = Depends(require_admin)):
+    res = await db.intervenants.update_one({"id": intervenant_id}, {"$set": {"diploma_verified": False}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    return {"ok": True}
+
+@api_router.post("/admin/intervenants/{intervenant_id}/toggle-hidden")
+async def admin_toggle_hidden(intervenant_id: str, _: dict = Depends(require_admin)):
+    p = await db.intervenants.find_one({"id": intervenant_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    await db.intervenants.update_one({"id": intervenant_id}, {"$set": {"hidden": not p.get("hidden", False)}})
+    return {"ok": True, "hidden": not p.get("hidden", False)}
+
+@api_router.get("/admin/callbacks")
+async def admin_list_callbacks(_: dict = Depends(require_admin)):
+    cursor = db.callbacks.find({}, {"_id": 0}).sort("created_at", -1)
+    return await cursor.to_list(1000)
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"app": "APA Connect", "ok": True}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+# ---------- Seed ----------
+async def seed_admin():
+    email = os.environ.get("ADMIN_EMAIL", "admin@apaconnect.fr")
+    password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    existing = await db.users.find_one({"email": email})
+    if not existing:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "password_hash": hash_password(password),
+            "role": "admin",
+            "created_at": now_utc().isoformat(),
+        })
+        logger.info(f"Admin seeded: {email}")
+    elif not verify_password(password, existing["password_hash"]):
+        await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})
+        logger.info("Admin password updated")
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+async def seed_fake_intervenants():
+    if await db.intervenants.count_documents({"seed": True}) > 0:
+        return
+    rouen_base = [
+        ("Sophie", "Martin", "Rouen", 49.4432, 1.0993,
+         "Licence STAPS APA-S", True, ["Seniors", "Maladies chroniques"],
+         ["domicile", "cabinet"], "Rouen Centre + 10km",
+         "Spécialiste APA pour seniors et prévention des chutes."),
+        ("Lucas", "Bernard", "Bois-Guillaume", 49.4697, 1.1161,
+         "Master APA", True, ["Seniors", "Réhabilitation cardiaque"],
+         ["domicile", "exterieur"], "Agglo Rouen Nord",
+         "Coach APA passionné par la réhabilitation cardiaque."),
+        ("Camille", "Dubois", "Sotteville-lès-Rouen", 49.4090, 1.0942,
+         "Licence STAPS APA-S", False, ["Seniors", "Oncologie"],
+         ["domicile", "salle"], "Sud de Rouen",
+         "Accompagnement APA post-oncologie et mobilité douce."),
+        ("Julien", "Petit", "Mont-Saint-Aignan", 49.4650, 1.0820,
+         "Master APA-S", True, ["Adultes", "Diabète", "Obésité"],
+         ["cabinet", "salle"], "Mont-Saint-Aignan et environs",
+         "Reprise d'activité physique adaptée aux pathologies métaboliques."),
+        ("Emma", "Leroy", "Grand-Quevilly", 49.4037, 1.0584,
+         "Licence APA-S", True, ["Seniors", "Parkinson", "Alzheimer"],
+         ["domicile"], "Rouen Sud et Ouest",
+         "Interventions à domicile pour publics fragiles."),
+    ]
+    # availability for this week
+    week = monday_of_week()
+    base = datetime.fromisoformat(week).date()
+    def av_for(i: int) -> Dict[str, Dict[str, bool]]:
+        """Different patterns per intervenant index."""
+        patterns = [
+            {0: (True, True), 1: (True, False), 2: (False, True), 4: (True, True)},       # Sophie
+            {0: (True, False), 2: (True, True), 3: (True, False), 4: (False, True)},      # Lucas
+            {1: (True, True), 3: (True, True)},                                           # Camille
+            {0: (False, True), 1: (True, True), 2: (True, False), 3: (True, True)},       # Julien
+            {0: (True, True), 1: (False, True), 2: (True, True), 3: (False, True), 4: (True, False)},  # Emma
+        ]
+        pat = patterns[i]
+        out = {}
+        for day_idx, (m, a) in pat.items():
+            d = (base + timedelta(days=day_idx)).isoformat()
+            out[d] = {"morning": m, "afternoon": a}
+        return out
 
-# Include the router in the main app
+    # ensure at least one intervenant is available TODAY
+    today_wd = now_utc().weekday()
+    for i, (fn, ln, city, lat, lng, dip, verified, pubs, places, zone, bio) in enumerate(rouen_base):
+        av = av_for(i)
+        if i == 0:  # force today availability for Sophie
+            av[today_iso()] = {"morning": True, "afternoon": True}
+        doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": None,
+            "first_name": fn,
+            "last_name": ln,
+            "city": city,
+            "zone": zone,
+            "diploma": dip,
+            "diploma_verified": verified,
+            "publics": pubs,
+            "intervention_places": places,
+            "availability": av,
+            "availability_week": week,
+            "availability_confirmed_at": now_utc().isoformat(),
+            "last_availability_update": now_utc().isoformat(),
+            "hidden": False,
+            "phone": "",
+            "bio": bio,
+            "lat": lat,
+            "lng": lng,
+            "created_at": now_utc().isoformat(),
+            "seed": True,
+        }
+        await db.intervenants.insert_one(doc)
+    logger.info("Seeded 5 fake intervenants around Rouen")
+
+@app.on_event("startup")
+async def on_startup():
+    await db.users.create_index("email", unique=True)
+    await db.intervenants.create_index("city")
+    await db.intervenants.create_index("id", unique=True)
+    await db.callbacks.create_index("created_at")
+    await seed_admin()
+    await seed_fake_intervenants()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    client.close()
+
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],
+    allow_origin_regex=".*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
