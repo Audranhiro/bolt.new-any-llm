@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
-import { MapPin, BadgeCheck, Home, Calendar, ArrowLeft, PhoneCall } from "lucide-react";
+import { MapPin, BadgeCheck, Home, Calendar, ArrowLeft, PhoneCall, Star } from "lucide-react";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
@@ -16,6 +16,7 @@ export default function IntervenantDetail() {
   if (i === null) return <div className="max-w-4xl mx-auto p-8">Chargement…</div>;
   if (i === false) return <div className="max-w-4xl mx-auto p-8">Intervenant introuvable.</div>;
 
+  const isPremium = i.plan === "premium" || i.subscription_status === "active";
   const av = i.availability || {};
   const week = (() => {
     if (!i.availability_week) return [];
@@ -35,6 +36,11 @@ export default function IntervenantDetail() {
 
       <div className="bg-white border-2 border-[#E5E7EB] rounded-2xl p-6 md:p-10">
         <div className="flex flex-wrap gap-2 mb-3">
+          {isPremium && (
+            <span className="inline-flex items-center gap-1 bg-[#F8E7A1] border border-[#E0B84F] text-[#1C1917] text-sm font-semibold px-3 py-1 rounded-full">
+              <Star className="w-4 h-4" /> Premium
+            </span>
+          )}
           {i.diploma_verified && (
             <span className="inline-flex items-center gap-1 bg-[#2D6A4F] text-white text-sm font-semibold px-3 py-1 rounded-full">
               <BadgeCheck className="w-4 h-4" /> Diplôme vérifié
@@ -72,7 +78,6 @@ export default function IntervenantDetail() {
           <InfoBlock title="Dernière mise à jour" value={i.last_availability_update ? new Date(i.last_availability_update).toLocaleString("fr-FR") : "—"} />
         </div>
 
-        {/* Availability grid */}
         <div className="mt-8">
           <h2 className="font-heading font-bold text-xl text-[#1C1917] mb-3">Disponibilités cette semaine</h2>
           {i.available_this_week ? (
