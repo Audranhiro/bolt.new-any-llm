@@ -9,10 +9,17 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     (async () => {
+      const token = localStorage.getItem("apa_token");
+      if (!token) {
+        setUser(false);
+        setBooted(true);
+        return;
+      }
       try {
         const { data } = await api.get("/auth/me");
         setUser(data);
       } catch {
+        localStorage.removeItem("apa_token");
         setUser(false);
       } finally {
         setBooted(true);
@@ -23,17 +30,17 @@ export function AuthProvider({ children }) {
   async function login(email, password) {
     const { data } = await api.post("/auth/login", { email, password });
     if (data.token) localStorage.setItem("apa_token", data.token);
-    const me = await api.get("/auth/me");
-    setUser(me.data);
-    return me.data;
+    const u = { id: data.id, email: data.email, role: data.role };
+    setUser(u);
+    return u;
   }
 
   async function register(payload) {
     const { data } = await api.post("/auth/register", payload);
     if (data.token) localStorage.setItem("apa_token", data.token);
-    const me = await api.get("/auth/me");
-    setUser(me.data);
-    return me.data;
+    const u = { id: data.id, email: data.email, role: data.role };
+    setUser(u);
+    return u;
   }
 
   async function logout() {
