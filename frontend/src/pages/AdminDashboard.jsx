@@ -94,7 +94,7 @@ export default function AdminDashboard() {
             <table className="w-full text-base">
               <thead>
                 <tr className="bg-[#F9F8F6]">
-                  <Th>Date</Th><Th>Prénom</Th><Th>Contact</Th><Th>Ville</Th><Th>Besoin</Th><Th>Message</Th><Th>Intervenant</Th>
+                  <Th>Date</Th><Th>Prénom</Th><Th>Téléphone</Th><Th>Email</Th><Th>Ville</Th><Th>Besoin</Th><Th>Message</Th><Th>Intervenant</Th><Th>Statut</Th>
                 </tr>
               </thead>
               <tbody>
@@ -102,11 +102,13 @@ export default function AdminDashboard() {
                   <tr key={c.id} data-testid={`cb-row-${c.id}`} className="border-t-2 border-[#E5E7EB] align-top">
                     <Td className="text-sm whitespace-nowrap">{new Date(c.created_at).toLocaleString("fr-FR")}</Td>
                     <Td>{c.first_name}</Td>
-                    <Td>{c.contact}</Td>
+                    <Td>{c.phone || (c.contact && !c.email ? c.contact : "—")}</Td>
+                    <Td>{c.email || "—"}</Td>
                     <Td>{c.city}</Td>
                     <Td>{c.need}</Td>
                     <Td className="max-w-xs text-sm">{c.message || "—"}</Td>
                     <Td className="text-sm">{c.intervenant_name}</Td>
+                    <Td><AdminStatusBadge status={c.status} /></Td>
                   </tr>
                 ))}
               </tbody>
@@ -120,3 +122,13 @@ export default function AdminDashboard() {
 
 const Th = ({ children }) => <th className="p-3 text-left font-semibold text-[#1C1917]">{children}</th>;
 const Td = ({ children, className = "" }) => <td className={`p-3 ${className}`}>{children}</td>;
+
+function AdminStatusBadge({ status }) {
+  const map = {
+    new: { label: "Nouvelle", cls: "bg-[#B85042] text-white" },
+    contacted: { label: "Contacté", cls: "bg-[#74A57F] text-white" },
+    closed: { label: "Clôturée", cls: "bg-[#4B5563] text-white" },
+  };
+  const s = map[status] || map.new;
+  return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${s.cls}`}>{s.label}</span>;
+}

@@ -127,10 +127,15 @@ class AvailabilityIn(BaseModel):
 class CallbackIn(BaseModel):
     intervenant_id: str
     first_name: str
-    contact: str
+    contact: str = ""  # backward compat
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
     city: str
     need: str
     message: Optional[str] = ""
+
+class CallbackStatusIn(BaseModel):
+    status: str  # "new" | "contacted" | "closed"
 
 # ---------- Auth endpoints ----------
 @api_router.post("/auth/register")
@@ -349,17 +354,32 @@ async def get_intervenant(intervenant_id: str):
     return public_intervenant(p)
 
 # ---------- Callbacks ----------
+ALLOWED_STATUSES = {"new", "contacted", "closed"}
+
 @api_router.post("/callbacks")
 async def create_callback(data: CallbackIn):
     p = await db.intervenants.find_one({"id": data.intervenant_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Intervenant introuvable")
+    phone = (data.phone or "").strip()
+    email = (data.email or "").strip()
+    contact = (data.contact or "").strip()
+    # backward compat: if only "contact" provided, infer email/phone
+    if not phone and not email and contact:
+        if "@" in contact:
+            email = contact
+        else:
+            phone = contact
+    if not phone and not email:
+        raise HTTPException(status_code=400, detail="Téléphone ou email obligatoire")
     doc = {
         "id": str(uuid.uuid4()),
         "intervenant_id": data.intervenant_id,
         "intervenant_name": f"{p.get('first_name','')} {p.get('last_name','')}".strip(),
         "first_name": data.first_name,
-        "contact": data.contact,
+        "phone": phone,
+        "email": email,
+        "contact": contact or (phone or email),
         "city": data.city,
         "need": data.need,
         "message": data.message or "",
@@ -368,6 +388,29 @@ async def create_callback(data: CallbackIn):
     }
     await db.callbacks.insert_one(doc)
     return {"id": doc["id"], "ok": True}
+
+@api_router.get("/intervenants/me/callbacks")
+async def my_callbacks(user: dict = Depends(require_intervenant)):
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profil introuvable")
+    cursor = db.callbacks.find({"intervenant_id": profile["id"]}, {"_id": 0}).sort("created_at", -1)
+    return await cursor.to_list(1000)
+
+@api_router.patch("/intervenants/me/callbacks/{callback_id}/status")
+async def update_my_callback_status(callback_id: str, data: CallbackStatusIn, user: dict = Depends(require_intervenant)):
+    if data.status not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profil introuvable")
+    res = await db.callbacks.update_one(
+        {"id": callback_id, "intervenant_id": profile["id"]},
+        {"$set": {"status": data.status, "status_updated_at": now_utc().isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Demande introuvable")
+    return {"ok": True, "status": data.status}
 
 # ---------- Admin ----------
 @api_router.get("/admin/intervenants")

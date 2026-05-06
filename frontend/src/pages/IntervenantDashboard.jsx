@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
-import { Check, X, Save } from "lucide-react";
+import { Check, X, Save, Phone, Mail, Inbox } from "lucide-react";
 
 const PUBLICS = ["Seniors", "Adultes", "Enfants", "Maladies chroniques", "Oncologie", "Diabète", "Obésité", "Réhabilitation cardiaque", "Parkinson", "Alzheimer"];
 const PLACES = [
@@ -26,12 +26,23 @@ export default function IntervenantDashboard() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [callbacks, setCallbacks] = useState([]);
 
   useEffect(() => {
     if (user && user.role === "intervenant") {
       api.get("/intervenants/me").then(({ data }) => setProfile(data));
+      api.get("/intervenants/me/callbacks").then(({ data }) => setCallbacks(data)).catch(() => {});
     }
   }, [user]);
+
+  async function changeStatus(id, status) {
+    try {
+      await api.patch(`/intervenants/me/callbacks/${id}/status`, { status });
+      setCallbacks((cs) => cs.map((c) => c.id === id ? { ...c, status } : c));
+    } catch (e) {
+      setErr(formatApiError(e));
+    }
+  }
 
   if (user === null) return <div className="p-8">Chargement…</div>;
   if (!user || user.role !== "intervenant") return <Navigate to="/intervenant/login" />;
@@ -221,8 +232,80 @@ export default function IntervenantDashboard() {
           Disponibilités déclarées par l'intervenant, à confirmer lors de la prise de contact.
         </p>
       </section>
+
+      {/* Mes demandes de rappel */}
+      <section className="bg-white border-2 border-[#E5E7EB] rounded-2xl p-6" data-testid="my-callbacks-section">
+        <div className="flex items-center gap-3 mb-4">
+          <Inbox className="w-6 h-6 text-[#2D6A4F]" />
+          <h2 className="font-heading font-bold text-2xl">Mes demandes de rappel ({callbacks.length})</h2>
+        </div>
+
+        {callbacks.length === 0 && (
+          <div className="bg-[#F9F8F6] border-2 border-dashed border-[#E5E7EB] rounded-xl p-6 text-center text-[#4B5563]" data-testid="my-callbacks-empty">
+            Aucune demande de rappel pour le moment.
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {callbacks.map((c) => (
+            <article key={c.id} data-testid={`my-cb-${c.id}`} className="border-2 border-[#E5E7EB] rounded-xl p-4 md:p-5">
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <div className="flex-1 min-w-[220px]">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h3 className="font-heading font-bold text-xl text-[#1C1917]">{c.first_name}</h3>
+                    <StatusBadge status={c.status} />
+                    <span className="text-sm text-[#4B5563]">{new Date(c.created_at).toLocaleString("fr-FR")}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-base">
+                    {c.phone && (
+                      <a href={`tel:${c.phone}`} className="inline-flex items-center gap-2 text-[#1C1917] hover:text-[#2D6A4F]">
+                        <Phone className="w-4 h-4" /> <span className="font-semibold">{c.phone}</span>
+                      </a>
+                    )}
+                    {c.email && (
+                      <a href={`mailto:${c.email}`} className="inline-flex items-center gap-2 text-[#1C1917] hover:text-[#2D6A4F]">
+                        <Mail className="w-4 h-4" /> <span className="font-semibold">{c.email}</span>
+                      </a>
+                    )}
+                  </div>
+                  {c.city && <div className="mt-1 text-sm text-[#4B5563]">Ville : {c.city}</div>}
+                  {c.need && <div className="mt-1 text-sm text-[#4B5563]">Besoin : {c.need}</div>}
+                  {c.message && (
+                    <div className="mt-3 bg-[#F9F8F6] border border-[#E5E7EB] rounded-lg p-3 text-[#1C1917]">
+                      {c.message}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 min-w-[200px]">
+                  <label className="text-sm font-semibold text-[#4B5563]">Statut</label>
+                  <select
+                    data-testid={`my-cb-status-${c.id}`}
+                    value={c.status}
+                    onChange={(e) => changeStatus(c.id, e.target.value)}
+                    className="min-h-[48px] px-3 text-base rounded-xl border-2 border-[#E5E7EB] focus:border-[#2D6A4F] outline-none bg-white"
+                  >
+                    <option value="new">Nouvelle</option>
+                    <option value="contacted">Contacté</option>
+                    <option value="closed">Clôturée</option>
+                  </select>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
+}
+
+function StatusBadge({ status }) {
+  const map = {
+    new: { label: "Nouvelle", cls: "bg-[#B85042] text-white" },
+    contacted: { label: "Contacté", cls: "bg-[#74A57F] text-white" },
+    closed: { label: "Clôturée", cls: "bg-[#4B5563] text-white" },
+  };
+  const s = map[status] || map.new;
+  return <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${s.cls}`}>{s.label}</span>;
 }
 
 const inputCls = "w-full min-h-[56px] px-4 text-lg rounded-xl border-2 border-[#E5E7EB] focus:border-[#2D6A4F] outline-none bg-white";

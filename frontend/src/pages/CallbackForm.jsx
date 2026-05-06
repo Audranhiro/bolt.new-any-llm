@@ -7,7 +7,7 @@ export default function CallbackForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [i, setI] = useState(null);
-  const [form, setForm] = useState({ first_name: "", contact: "", city: "", need: "", message: "" });
+  const [form, setForm] = useState({ first_name: "", phone: "", email: "", city: "", need: "", message: "" });
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -21,8 +21,12 @@ export default function CallbackForm() {
   async function submit(e) {
     e.preventDefault();
     setError("");
-    if (!form.first_name || !form.contact || !form.city || !form.need) {
+    if (!form.first_name || !form.city || !form.need) {
       setError("Merci de remplir tous les champs obligatoires.");
+      return;
+    }
+    if (!form.phone && !form.email) {
+      setError("Merci de renseigner un téléphone ou un email.");
       return;
     }
     setSubmitting(true);
@@ -76,9 +80,13 @@ export default function CallbackForm() {
           <Field label="Prénom *" htmlFor="f-name">
             <input id="f-name" data-testid="cb-first-name" value={form.first_name} onChange={(e) => setField("first_name", e.target.value)} className={inputCls} required />
           </Field>
-          <Field label="Téléphone ou email *" htmlFor="f-contact">
-            <input id="f-contact" data-testid="cb-contact" value={form.contact} onChange={(e) => setField("contact", e.target.value)} className={inputCls} required />
+          <Field label="Téléphone *" htmlFor="f-phone">
+            <input id="f-phone" type="tel" data-testid="cb-phone" value={form.phone} onChange={(e) => setField("phone", e.target.value)} className={inputCls} placeholder="ex: 06 12 34 56 78" />
           </Field>
+          <Field label="Email (facultatif)" htmlFor="f-email">
+            <input id="f-email" type="email" data-testid="cb-email" value={form.email} onChange={(e) => setField("email", e.target.value)} className={inputCls} placeholder="ex: prenom@email.fr" />
+          </Field>
+          <p className="text-sm text-[#4B5563] -mt-2">Renseignez au moins un téléphone ou un email.</p>
           <Field label="Ville *" htmlFor="f-city">
             <input id="f-city" data-testid="cb-city" value={form.city} onChange={(e) => setField("city", e.target.value)} className={inputCls} required />
           </Field>
