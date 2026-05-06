@@ -20,6 +20,9 @@ export default function Navbar() {
         </Link>
 
         <nav className="flex items-center gap-3">
+          <Link to="/kit-documents" className="hidden sm:inline text-base font-medium text-[#1C1917] hover:text-[#2D6A4F]" data-testid="nav-kit-docs">
+            Kit documents
+          </Link>
           {user && user.role === "admin" && (
             <Link to="/admin" className="text-base font-medium text-[#1C1917] hover:text-[#2D6A4F]" data-testid="nav-admin">
               Admin

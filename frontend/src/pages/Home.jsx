@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Search, UserCog, HeartHandshake, ShieldCheck, Map } from "lucide-react";
+import { Search, UserCog, HeartHandshake, ShieldCheck, Map, FileText } from "lucide-react";
 
 export default function Home() {
   return (
@@ -50,6 +50,20 @@ export default function Home() {
               </div>
             </Link>
           </div>
+
+          <Link
+            to="/kit-documents"
+            data-testid="home-kit-btn"
+            className="mt-5 inline-flex items-center gap-3 bg-white hover:bg-[#F9F8F6] text-[#1C1917] border-2 border-[#E5E7EB] hover:border-[#2D6A4F] rounded-2xl px-5 py-4 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] flex items-center justify-center">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-heading font-bold text-lg">Kit documents APA</div>
+              <div className="text-sm text-[#4B5563]">5 modèles administratifs prêts à copier</div>
+            </div>
+          </Link>
         </div>
       </section>
 

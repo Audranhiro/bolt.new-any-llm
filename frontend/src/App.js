@@ -10,6 +10,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import IntervenantDashboard from "@/pages/IntervenantDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
+import KitDocuments from "@/pages/KitDocuments";
 import { Toaster } from "sonner";
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
             <Route path="/intervenant/dashboard" element={<IntervenantDashboard />} />
             <Route path="/admin/login" element={<Login mode="admin" />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/kit-documents" element={<KitDocuments />} />
           </Routes>
           <Toaster position="top-center" />
         </BrowserRouter>
