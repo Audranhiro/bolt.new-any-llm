@@ -452,6 +452,345 @@ async def admin_list_callbacks(_: dict = Depends(require_admin)):
     cursor = db.callbacks.find({}, {"_id": 0}).sort("created_at", -1)
     return await cursor.to_list(1000)
 
+# =============================================================================
+# MODULE 1: Cours collectifs APA (priorité cours sur chaise)
+# =============================================================================
+CLASS_CATEGORIES = {"cours_sur_chaise", "mobilite_douce", "prevention_chutes",
+                    "renforcement_doux", "respiration_relaxation", "equilibre", "autre"}
+CLASS_PUBLICS = {"seniors", "debutants", "personnes_deconditionnees",
+                 "douleurs_chroniques", "retour_activite", "autre"}
+BOOKING_STATUSES = {"reserved", "cancelled", "attended", "no_show"}
+
+class ClassIn(BaseModel):
+    title: str
+    description: str = ""
+    category: str = "cours_sur_chaise"
+    class_type: str = ""  # libre: ex "individuel", "groupe", "duo"
+    adapted_chair_class: bool = True
+    target_public: List[str] = []
+    city: str
+    address: str = ""
+    date: str  # ISO YYYY-MM-DD
+    start_time: str = ""  # HH:MM
+    duration_minutes: int = 60
+    price: float = 0.0
+    capacity: int = 8
+
+class ClassUpdateIn(ClassIn):
+    pass
+
+class StatusToggleIn(BaseModel):
+    status: str  # "active" | "inactive"
+
+class BookingIn(BaseModel):
+    name: str
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+
+class BookingStatusIn(BaseModel):
+    status: str  # reserved/cancelled/attended/no_show
+
+async def _get_my_intervenant(user: dict) -> dict:
+    profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profil intervenant introuvable")
+    return profile
+
+async def _count_active_bookings(class_id: str) -> int:
+    return await db.bookings.count_documents({"class_id": class_id, "status": "reserved"})
+
+def _public_class(c: dict, intervenant_name: str = "", booked: int = 0) -> dict:
+    cap = int(c.get("capacity") or 0)
+    return {
+        "id": c["id"],
+        "title": c.get("title", ""),
+        "description": c.get("description", ""),
+        "category": c.get("category", ""),
+        "class_type": c.get("class_type", ""),
+        "adapted_chair_class": bool(c.get("adapted_chair_class", False)),
+        "target_public": c.get("target_public", []) or [],
+        "city": c.get("city", ""),
+        "address": c.get("address", ""),
+        "date": c.get("date", ""),
+        "start_time": c.get("start_time", ""),
+        "duration_minutes": c.get("duration_minutes", 60),
+        "price": c.get("price", 0.0),
+        "capacity": cap,
+        "booked": booked,
+        "places_left": max(0, cap - booked),
+        "intervenant_id": c.get("intervenant_id", ""),
+        "intervenant_name": intervenant_name,
+        "status": c.get("status", "active"),
+        "created_at": c.get("created_at", ""),
+    }
+
+@api_router.post("/intervenants/me/classes")
+async def create_class(data: ClassIn, user: dict = Depends(require_intervenant)):
+    if data.category not in CLASS_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Catégorie invalide")
+    profile = await _get_my_intervenant(user)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "intervenant_id": profile["id"],
+        **data.model_dump(),
+        "status": "active",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.classes.insert_one(doc)
+    return _public_class(doc, f"{profile.get('first_name','')} {profile.get('last_name','')}".strip(), 0)
+
+@api_router.get("/intervenants/me/classes")
+async def list_my_classes(user: dict = Depends(require_intervenant)):
+    profile = await _get_my_intervenant(user)
+    cursor = db.classes.find({"intervenant_id": profile["id"]}, {"_id": 0}).sort("date", 1)
+    out = []
+    name = f"{profile.get('first_name','')} {profile.get('last_name','')}".strip()
+    async for c in cursor:
+        booked = await _count_active_bookings(c["id"])
+        out.append(_public_class(c, name, booked))
+    return out
+
+@api_router.put("/intervenants/me/classes/{class_id}")
+async def update_my_class(class_id: str, data: ClassUpdateIn, user: dict = Depends(require_intervenant)):
+    profile = await _get_my_intervenant(user)
+    if data.category not in CLASS_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Catégorie invalide")
+    res = await db.classes.update_one(
+        {"id": class_id, "intervenant_id": profile["id"]},
+        {"$set": {**data.model_dump(), "updated_at": now_utc().isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+    c = await db.classes.find_one({"id": class_id}, {"_id": 0})
+    booked = await _count_active_bookings(class_id)
+    return _public_class(c, f"{profile.get('first_name','')} {profile.get('last_name','')}".strip(), booked)
+
+@api_router.patch("/intervenants/me/classes/{class_id}/status")
+async def toggle_my_class_status(class_id: str, data: StatusToggleIn, user: dict = Depends(require_intervenant)):
+    if data.status not in {"active", "inactive"}:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    profile = await _get_my_intervenant(user)
+    res = await db.classes.update_one(
+        {"id": class_id, "intervenant_id": profile["id"]},
+        {"$set": {"status": data.status}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+    return {"ok": True, "status": data.status}
+
+@api_router.get("/intervenants/me/classes/{class_id}/bookings")
+async def list_my_class_bookings(class_id: str, user: dict = Depends(require_intervenant)):
+    profile = await _get_my_intervenant(user)
+    c = await db.classes.find_one({"id": class_id, "intervenant_id": profile["id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+    cursor = db.bookings.find({"class_id": class_id}, {"_id": 0}).sort("created_at", -1)
+    return await cursor.to_list(1000)
+
+@api_router.patch("/intervenants/me/bookings/{booking_id}/status")
+async def update_booking_status(booking_id: str, data: BookingStatusIn, user: dict = Depends(require_intervenant)):
+    if data.status not in BOOKING_STATUSES:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    profile = await _get_my_intervenant(user)
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Réservation introuvable")
+    c = await db.classes.find_one({"id": booking["class_id"], "intervenant_id": profile["id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=403, detail="Non autorisé")
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"status": data.status, "status_updated_at": now_utc().isoformat()}})
+    return {"ok": True, "status": data.status}
+
+@api_router.get("/classes")
+async def list_classes(
+    chair: bool = False,
+    city: Optional[str] = None,
+    category: Optional[str] = None,
+):
+    query: Dict[str, Any] = {"status": "active"}
+    if chair:
+        query["adapted_chair_class"] = True
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if category and category in CLASS_CATEGORIES:
+        query["category"] = category
+    cursor = db.classes.find(query, {"_id": 0}).sort([("adapted_chair_class", -1), ("date", 1)])
+    out = []
+    intervenant_cache: Dict[str, str] = {}
+    async for c in cursor:
+        # only show future or today
+        if c.get("date") and c["date"] < today_iso():
+            continue
+        iid = c.get("intervenant_id", "")
+        if iid not in intervenant_cache:
+            p = await db.intervenants.find_one({"id": iid}, {"_id": 0, "first_name": 1, "last_name": 1})
+            intervenant_cache[iid] = (f"{p.get('first_name','')} {p.get('last_name','')}".strip()
+                                       if p else "")
+        booked = await _count_active_bookings(c["id"])
+        out.append(_public_class(c, intervenant_cache[iid], booked))
+    return out
+
+@api_router.get("/classes/{class_id}")
+async def get_class(class_id: str):
+    c = await db.classes.find_one({"id": class_id, "status": "active"}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+    p = await db.intervenants.find_one({"id": c.get("intervenant_id", "")}, {"_id": 0})
+    name = f"{p.get('first_name','')} {p.get('last_name','')}".strip() if p else ""
+    booked = await _count_active_bookings(class_id)
+    return _public_class(c, name, booked)
+
+@api_router.post("/classes/{class_id}/book")
+async def book_class(class_id: str, data: BookingIn):
+    c = await db.classes.find_one({"id": class_id, "status": "active"}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+    if not (data.email or data.phone):
+        raise HTTPException(status_code=400, detail="Téléphone ou email requis")
+    booked = await _count_active_bookings(class_id)
+    if booked >= int(c.get("capacity", 0)):
+        raise HTTPException(status_code=400, detail="Cours complet")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "class_id": class_id,
+        "user_id": None,
+        "name": data.name,
+        "email": (data.email or "").strip(),
+        "phone": (data.phone or "").strip(),
+        "status": "reserved",
+        "payment_status": "free",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.bookings.insert_one(doc)
+    return {"id": doc["id"], "status": "reserved", "class_id": class_id}
+
+@api_router.post("/bookings/{booking_id}/cancel")
+async def cancel_booking(booking_id: str):
+    res = await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"status": "cancelled", "cancelled_at": now_utc().isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Réservation introuvable")
+    return {"ok": True}
+
+# =============================================================================
+# MODULE 2: Bibliothèque vidéos APA (priorité vidéos sur chaise)
+# =============================================================================
+VIDEO_CATEGORIES = {"exercices_sur_chaise", "mobilite", "renforcement_doux",
+                    "respiration", "equilibre", "relaxation", "autre"}
+VIDEO_LEVELS = {"debutant", "intermediaire", "avance"}
+VIDEO_ACCESS = {"free", "premium", "private"}
+
+class VideoIn(BaseModel):
+    title: str
+    description: str = ""
+    video_url: str
+    category: str = "exercices_sur_chaise"
+    video_type: str = ""  # libre: ex "exercice", "demo", "cours"
+    adapted_chair_video: bool = True
+    level: str = "debutant"
+    target_public: List[str] = []
+    duration_minutes: int = 10
+    access_level: str = "free"
+
+def _public_video(v: dict, intervenant_name: str = "") -> dict:
+    return {
+        "id": v["id"],
+        "title": v.get("title", ""),
+        "description": v.get("description", ""),
+        "video_url": v.get("video_url", ""),
+        "category": v.get("category", ""),
+        "video_type": v.get("video_type", ""),
+        "adapted_chair_video": bool(v.get("adapted_chair_video", False)),
+        "level": v.get("level", "debutant"),
+        "target_public": v.get("target_public", []) or [],
+        "duration_minutes": v.get("duration_minutes", 0),
+        "access_level": v.get("access_level", "free"),
+        "intervenant_id": v.get("intervenant_id", ""),
+        "intervenant_name": intervenant_name,
+        "status": v.get("status", "active"),
+        "created_at": v.get("created_at", ""),
+    }
+
+@api_router.post("/intervenants/me/videos")
+async def create_video(data: VideoIn, user: dict = Depends(require_intervenant)):
+    if data.category not in VIDEO_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Catégorie invalide")
+    if data.level not in VIDEO_LEVELS:
+        raise HTTPException(status_code=400, detail="Niveau invalide")
+    if data.access_level not in VIDEO_ACCESS:
+        raise HTTPException(status_code=400, detail="Accès invalide")
+    profile = await _get_my_intervenant(user)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "intervenant_id": profile["id"],
+        **data.model_dump(),
+        "status": "active",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.videos.insert_one(doc)
+    return _public_video(doc, f"{profile.get('first_name','')} {profile.get('last_name','')}".strip())
+
+@api_router.get("/intervenants/me/videos")
+async def list_my_videos(user: dict = Depends(require_intervenant)):
+    profile = await _get_my_intervenant(user)
+    cursor = db.videos.find({"intervenant_id": profile["id"]}, {"_id": 0}).sort("created_at", -1)
+    name = f"{profile.get('first_name','')} {profile.get('last_name','')}".strip()
+    return [_public_video(v, name) async for v in cursor]
+
+@api_router.put("/intervenants/me/videos/{video_id}")
+async def update_my_video(video_id: str, data: VideoIn, user: dict = Depends(require_intervenant)):
+    profile = await _get_my_intervenant(user)
+    if data.category not in VIDEO_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Catégorie invalide")
+    res = await db.videos.update_one(
+        {"id": video_id, "intervenant_id": profile["id"]},
+        {"$set": {**data.model_dump(), "updated_at": now_utc().isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Vidéo introuvable")
+    v = await db.videos.find_one({"id": video_id}, {"_id": 0})
+    return _public_video(v, f"{profile.get('first_name','')} {profile.get('last_name','')}".strip())
+
+@api_router.patch("/intervenants/me/videos/{video_id}/status")
+async def toggle_my_video_status(video_id: str, data: StatusToggleIn, user: dict = Depends(require_intervenant)):
+    if data.status not in {"active", "inactive"}:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    profile = await _get_my_intervenant(user)
+    res = await db.videos.update_one(
+        {"id": video_id, "intervenant_id": profile["id"]},
+        {"$set": {"status": data.status}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Vidéo introuvable")
+    return {"ok": True, "status": data.status}
+
+@api_router.get("/videos")
+async def list_videos(
+    chair: bool = False,
+    category: Optional[str] = None,
+    level: Optional[str] = None,
+):
+    query: Dict[str, Any] = {"status": "active", "access_level": {"$in": ["free", "premium"]}}
+    if chair:
+        query["adapted_chair_video"] = True
+    if category and category in VIDEO_CATEGORIES:
+        query["category"] = category
+    if level and level in VIDEO_LEVELS:
+        query["level"] = level
+    cursor = db.videos.find(query, {"_id": 0}).sort([("adapted_chair_video", -1), ("created_at", -1)])
+    out = []
+    intervenant_cache: Dict[str, str] = {}
+    async for v in cursor:
+        iid = v.get("intervenant_id", "")
+        if iid not in intervenant_cache:
+            p = await db.intervenants.find_one({"id": iid}, {"_id": 0, "first_name": 1, "last_name": 1})
+            intervenant_cache[iid] = (f"{p.get('first_name','')} {p.get('last_name','')}".strip()
+                                       if p else "")
+        out.append(_public_video(v, intervenant_cache[iid]))
+    return out
+
 @api_router.get("/")
 async def root():
     return {"app": "APA Connect", "ok": True}
@@ -556,6 +895,10 @@ async def on_startup():
     await db.intervenants.create_index("city")
     await db.intervenants.create_index("id", unique=True)
     await db.callbacks.create_index("created_at")
+    await db.classes.create_index("intervenant_id")
+    await db.classes.create_index("date")
+    await db.bookings.create_index("class_id")
+    await db.videos.create_index("intervenant_id")
     await seed_admin()
     await seed_fake_intervenants()
 

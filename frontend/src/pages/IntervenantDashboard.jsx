@@ -3,6 +3,8 @@ import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Check, X, Save, Phone, Mail, Inbox } from "lucide-react";
+import MyClassesSection from "@/components/MyClassesSection";
+import MyVideosSection from "@/components/MyVideosSection";
 
 const PUBLICS = ["Seniors", "Adultes", "Enfants", "Maladies chroniques", "Oncologie", "Diabète", "Obésité", "Réhabilitation cardiaque", "Parkinson", "Alzheimer"];
 const PLACES = [
@@ -294,6 +296,9 @@ export default function IntervenantDashboard() {
           ))}
         </div>
       </section>
+
+      <MyClassesSection />
+      <MyVideosSection />
     </div>
   );
 }
