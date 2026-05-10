@@ -106,9 +106,15 @@ function ClassFormDialog({ c, onClose }) {
     date: c.date || "", start_time: c.start_time || "",
     duration_minutes: c.duration_minutes || 60,
     price: c.price ?? 0, capacity: c.capacity || 8,
+    structure_id: c.structure_id || "",
   });
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [structures, setStructures] = useState([]);
+
+  useEffect(() => {
+    api.get("/structures").then(({ data }) => setStructures(data)).catch(() => {});
+  }, []);
 
   function setField(k, v) { setForm((f) => ({ ...f, [k]: v })); }
   function togglePublic(p) {
@@ -182,6 +188,13 @@ function ClassFormDialog({ c, onClose }) {
             <Field label="Places"><input type="number" min="1" data-testid="cf-capacity" className={inputCls} value={form.capacity} onChange={(e) => setField("capacity", e.target.value)} /></Field>
             <Field label="Prix indicatif (€)"><input type="number" min="0" step="0.5" data-testid="cf-price" className={inputCls} value={form.price} onChange={(e) => setField("price", e.target.value)} /></Field>
           </div>
+
+          <Field label="Structure d'accueil (facultatif)">
+            <select data-testid="cf-structure" className={inputCls} value={form.structure_id} onChange={(e) => setField("structure_id", e.target.value)}>
+              <option value="">Aucune structure liée</option>
+              {structures.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
+            </select>
+          </Field>
 
           {err && <div className="text-[#B85042] font-semibold">{err}</div>}
           <div className="flex gap-3">

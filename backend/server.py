@@ -475,6 +475,8 @@ class ClassIn(BaseModel):
     duration_minutes: int = 60
     price: float = 0.0
     capacity: int = 8
+    structure_id: Optional[str] = None
+    structure_name: Optional[str] = ""
 
 class ClassUpdateIn(ClassIn):
     pass
@@ -520,6 +522,8 @@ def _public_class(c: dict, intervenant_name: str = "", booked: int = 0) -> dict:
         "places_left": max(0, cap - booked),
         "intervenant_id": c.get("intervenant_id", ""),
         "intervenant_name": intervenant_name,
+        "structure_id": c.get("structure_id") or None,
+        "structure_name": c.get("structure_name") or "",
         "status": c.get("status", "active"),
         "created_at": c.get("created_at", ""),
     }
@@ -529,10 +533,14 @@ async def create_class(data: ClassIn, user: dict = Depends(require_intervenant))
     if data.category not in CLASS_CATEGORIES:
         raise HTTPException(status_code=400, detail="Catégorie invalide")
     profile = await _get_my_intervenant(user)
+    payload = data.model_dump()
+    if payload.get("structure_id"):
+        s = await db.structures.find_one({"id": payload["structure_id"]}, {"_id": 0, "name": 1})
+        payload["structure_name"] = (s or {}).get("name", payload.get("structure_name") or "")
     doc = {
         "id": str(uuid.uuid4()),
         "intervenant_id": profile["id"],
-        **data.model_dump(),
+        **payload,
         "status": "active",
         "created_at": now_utc().isoformat(),
     }
@@ -555,9 +563,13 @@ async def update_my_class(class_id: str, data: ClassUpdateIn, user: dict = Depen
     profile = await _get_my_intervenant(user)
     if data.category not in CLASS_CATEGORIES:
         raise HTTPException(status_code=400, detail="Catégorie invalide")
+    payload = data.model_dump()
+    if payload.get("structure_id"):
+        s = await db.structures.find_one({"id": payload["structure_id"]}, {"_id": 0, "name": 1})
+        payload["structure_name"] = (s or {}).get("name", payload.get("structure_name") or "")
     res = await db.classes.update_one(
         {"id": class_id, "intervenant_id": profile["id"]},
-        {"$set": {**data.model_dump(), "updated_at": now_utc().isoformat()}}
+        {"$set": {**payload, "updated_at": now_utc().isoformat()}}
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Cours introuvable")
@@ -791,6 +803,121 @@ async def list_videos(
         out.append(_public_video(v, intervenant_cache[iid]))
     return out
 
+# =============================================================================
+# MODULE 3: Structures locales (associations, MSS, résidences seniors, …)
+# =============================================================================
+STRUCTURE_TYPES = {"association", "maison_sport_sante", "residence_senior",
+                   "mairie", "club", "centre_social", "autre"}
+
+class StructureIn(BaseModel):
+    name: str
+    type: str = "association"
+    city: str
+    address: str = ""
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    website: Optional[str] = ""
+    description: str = ""
+    accessibility_info: str = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+def _public_structure(s: dict) -> dict:
+    return {
+        "id": s["id"],
+        "name": s.get("name", ""),
+        "type": s.get("type", "association"),
+        "city": s.get("city", ""),
+        "address": s.get("address", ""),
+        "phone": s.get("phone", "") or "",
+        "email": s.get("email", "") or "",
+        "website": s.get("website", "") or "",
+        "description": s.get("description", "") or "",
+        "accessibility_info": s.get("accessibility_info", "") or "",
+        "lat": s.get("lat"),
+        "lng": s.get("lng"),
+        "status": s.get("status", "active"),
+        "created_at": s.get("created_at", ""),
+    }
+
+@api_router.post("/admin/structures")
+async def admin_create_structure(data: StructureIn, _: dict = Depends(require_admin)):
+    if data.type not in STRUCTURE_TYPES:
+        raise HTTPException(status_code=400, detail="Type invalide")
+    doc = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "status": "active",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.structures.insert_one(doc)
+    return _public_structure(doc)
+
+@api_router.put("/admin/structures/{structure_id}")
+async def admin_update_structure(structure_id: str, data: StructureIn, _: dict = Depends(require_admin)):
+    if data.type not in STRUCTURE_TYPES:
+        raise HTTPException(status_code=400, detail="Type invalide")
+    res = await db.structures.update_one(
+        {"id": structure_id},
+        {"$set": {**data.model_dump(), "updated_at": now_utc().isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Structure introuvable")
+    s = await db.structures.find_one({"id": structure_id}, {"_id": 0})
+    # propage le nouveau nom aux cours liés
+    await db.classes.update_many({"structure_id": structure_id}, {"$set": {"structure_name": s.get("name", "")}})
+    return _public_structure(s)
+
+@api_router.patch("/admin/structures/{structure_id}/status")
+async def admin_toggle_structure_status(structure_id: str, data: StatusToggleIn, _: dict = Depends(require_admin)):
+    if data.status not in {"active", "inactive"}:
+        raise HTTPException(status_code=400, detail="Statut invalide")
+    res = await db.structures.update_one({"id": structure_id}, {"$set": {"status": data.status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Structure introuvable")
+    return {"ok": True, "status": data.status}
+
+@api_router.get("/admin/structures")
+async def admin_list_structures(_: dict = Depends(require_admin)):
+    cursor = db.structures.find({}, {"_id": 0}).sort([("city", 1), ("name", 1)])
+    return [_public_structure(s) async for s in cursor]
+
+@api_router.get("/structures")
+async def list_structures(city: Optional[str] = None, type: Optional[str] = None):
+    query: Dict[str, Any] = {"status": "active"}
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if type and type in STRUCTURE_TYPES:
+        query["type"] = type
+    cursor = db.structures.find(query, {"_id": 0}).sort([("city", 1), ("name", 1)])
+    return [_public_structure(s) async for s in cursor]
+
+@api_router.get("/structures/{structure_id}")
+async def get_structure(structure_id: str):
+    s = await db.structures.find_one({"id": structure_id, "status": "active"}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Structure introuvable")
+    return _public_structure(s)
+
+@api_router.get("/structures/{structure_id}/classes")
+async def list_structure_classes(structure_id: str):
+    cursor = db.classes.find({"structure_id": structure_id, "status": "active"}, {"_id": 0}).sort(
+        [("adapted_chair_class", -1), ("date", 1)]
+    )
+    out = []
+    intervenant_cache: Dict[str, str] = {}
+    async for c in cursor:
+        if c.get("date") and c["date"] < today_iso():
+            continue
+        iid = c.get("intervenant_id", "")
+        if iid not in intervenant_cache:
+            p = await db.intervenants.find_one({"id": iid}, {"_id": 0, "first_name": 1, "last_name": 1})
+            intervenant_cache[iid] = (f"{p.get('first_name','')} {p.get('last_name','')}".strip()
+                                       if p else "")
+        booked = await _count_active_bookings(c["id"])
+        out.append(_public_class(c, intervenant_cache[iid], booked))
+    return out
+
 @api_router.get("/")
 async def root():
     return {"app": "APA Connect", "ok": True}
@@ -897,8 +1024,10 @@ async def on_startup():
     await db.callbacks.create_index("created_at")
     await db.classes.create_index("intervenant_id")
     await db.classes.create_index("date")
+    await db.classes.create_index("structure_id")
     await db.bookings.create_index("class_id")
     await db.videos.create_index("intervenant_id")
+    await db.structures.create_index("city")
     await seed_admin()
     await seed_fake_intervenants()
 

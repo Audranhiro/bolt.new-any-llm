@@ -26,6 +26,9 @@ export default function Navbar() {
           <Link to="/videos" className="hidden md:inline text-base font-medium text-[#1C1917] hover:text-[#2D6A4F]" data-testid="nav-videos">
             Vidéos
           </Link>
+          <Link to="/structures" className="hidden lg:inline text-base font-medium text-[#1C1917] hover:text-[#2D6A4F]" data-testid="nav-structures">
+            Structures
+          </Link>
           <Link to="/kit-documents" className="hidden sm:inline text-base font-medium text-[#1C1917] hover:text-[#2D6A4F]" data-testid="nav-kit-docs">
             Kit documents
           </Link>

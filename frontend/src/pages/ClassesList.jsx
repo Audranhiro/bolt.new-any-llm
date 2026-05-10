@@ -121,6 +121,11 @@ function ClassCard({ c, onBook }) {
       </div>
 
       {c.address && <div className="mt-2 text-sm text-[#4B5563]">📍 {c.address}</div>}
+      {c.structure_name && (
+        <div className="mt-1 text-sm text-[#1B4332] font-semibold inline-flex items-center gap-1">
+          <span>🏛️</span> {c.structure_name}
+        </div>
+      )}
 
       {c.target_public.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">

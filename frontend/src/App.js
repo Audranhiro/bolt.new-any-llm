@@ -13,6 +13,7 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import KitDocuments from "@/pages/KitDocuments";
 import ClassesList from "@/pages/ClassesList";
 import VideosList from "@/pages/VideosList";
+import StructuresList from "@/pages/StructuresList";
 import { Toaster } from "sonner";
 
 function App() {
@@ -34,6 +35,7 @@ function App() {
             <Route path="/kit-documents" element={<KitDocuments />} />
             <Route path="/cours" element={<ClassesList />} />
             <Route path="/videos" element={<VideosList />} />
+            <Route path="/structures" element={<StructuresList />} />
           </Routes>
           <Toaster position="top-center" />
         </BrowserRouter>

@@ -33,6 +33,16 @@ export const VIDEO_LEVELS = [
   { key: "avance", label: "Avancé" },
 ];
 
+export const STRUCTURE_TYPES = [
+  { key: "association", label: "Association" },
+  { key: "maison_sport_sante", label: "Maison Sport-Santé" },
+  { key: "residence_senior", label: "Résidence senior" },
+  { key: "mairie", label: "Mairie / Service municipal" },
+  { key: "club", label: "Club" },
+  { key: "centre_social", label: "Centre social" },
+  { key: "autre", label: "Autre" },
+];
+
 export function labelFromKey(list, key) {
   return (list.find((x) => x.key === key) || {}).label || key;
 }
