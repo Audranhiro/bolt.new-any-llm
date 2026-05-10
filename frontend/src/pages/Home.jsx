@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Search, UserCog, HeartHandshake, ShieldCheck, Map, FileText } from "lucide-react";
+import { Search, UserCog, HeartHandshake, ShieldCheck, Map, FileText, Armchair } from "lucide-react";
 
 export default function Home() {
   return (
@@ -51,19 +51,35 @@ export default function Home() {
             </Link>
           </div>
 
-          <Link
-            to="/kit-documents"
-            data-testid="home-kit-btn"
-            className="mt-5 inline-flex items-center gap-3 bg-white hover:bg-[#F9F8F6] text-[#1C1917] border-2 border-[#E5E7EB] hover:border-[#2D6A4F] rounded-2xl px-5 py-4 transition-colors"
-          >
-            <div className="w-10 h-10 rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] flex items-center justify-center">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="font-heading font-bold text-lg">Kit documents APA</div>
-              <div className="text-sm text-[#4B5563]">5 modèles administratifs prêts à copier</div>
-            </div>
-          </Link>
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            <Link
+              to="/cours"
+              data-testid="home-courses-btn"
+              className="group bg-[#2D6A4F] hover:bg-[#1B4332] text-white rounded-2xl p-5 md:p-6 flex items-center gap-4 min-h-[104px] transition-colors shadow-sm"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+                <Armchair className="w-6 h-6" />
+              </div>
+              <div className="text-left">
+                <div className="font-heading font-bold text-xl md:text-2xl">Réserver un cours sur chaise</div>
+                <div className="text-sm md:text-base text-white/85 mt-1">Cours doux, adaptés et progressifs, près de chez vous</div>
+              </div>
+            </Link>
+
+            <Link
+              to="/kit-documents"
+              data-testid="home-kit-btn"
+              className="group bg-white hover:bg-[#F9F8F6] text-[#1C1917] border-2 border-[#E5E7EB] hover:border-[#2D6A4F] rounded-2xl p-5 md:p-6 flex items-center gap-4 min-h-[104px] transition-colors"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-[#2D6A4F]/10 text-[#2D6A4F] flex items-center justify-center shrink-0">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div className="text-left">
+                <div className="font-heading font-bold text-xl md:text-2xl">Kit documents APA</div>
+                <div className="text-sm md:text-base text-[#4B5563] mt-1">5 modèles administratifs prêts à copier</div>
+              </div>
+            </Link>
+          </div>
         </div>
       </section>
 
