@@ -5,6 +5,15 @@ import { Armchair, MapPin, Calendar, Clock, Users, Filter, ShieldAlert, Check } 
 
 const FREE_DISCLAIMER = "Cours adaptés, doux et progressifs. En cas de doute médical, demandez l'avis de votre médecin.";
 
+function normalizeText(value = "") {
+  return value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export default function ClassesList() {
   const [items, setItems] = useState([]);
   const [chairOnly, setChairOnly] = useState(true);
@@ -18,10 +27,13 @@ export default function ClassesList() {
     try {
       const params = {};
       if (chairOnly) params.chair = true;
-      if (city) params.city = city;
       if (category) params.category = category;
       const { data } = await api.get("/classes", { params });
-      setItems(data);
+      const cityFilter = normalizeText(city);
+      const filteredData = cityFilter
+        ? data.filter((course) => normalizeText(course.city).includes(cityFilter))
+        : data;
+      setItems(filteredData);
     } finally {
       setLoading(false);
     }
