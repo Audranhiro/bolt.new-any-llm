@@ -1,17 +1,27 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
-import { MapPin, BadgeCheck, Home, Calendar, ArrowLeft, PhoneCall } from "lucide-react";
+import { MapPin, BadgeCheck, Home, Calendar, ArrowLeft, PhoneCall, Video, ExternalLink, Armchair } from "lucide-react";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 export default function IntervenantDetail() {
   const { id } = useParams();
   const [i, setI] = useState(null);
+  const [videos, setVideos] = useState([]);
 
   useEffect(() => {
-    api.get(`/intervenants/${id}`).then(({ data }) => setI(data)).catch(() => setI(false));
-  }, [id]);
+    api.get(`/intervenants/${id}`)
+        .then(({ data }) => setI(data))
+            .catch(() => setI(false));
+
+              api.get("/videos")
+                  .then(({ data }) => {
+                        const filtered = data.filter((v) => v.intervenant_id === id);
+                              setVideos(filtered);
+                                  })
+                                      .catch(() => setVideos([]));
+                                      }, [id]);
 
   if (i === null) return <div className="max-w-4xl mx-auto p-8">Chargement…</div>;
   if (i === false) return <div className="max-w-4xl mx-auto p-8">Intervenant introuvable.</div>;

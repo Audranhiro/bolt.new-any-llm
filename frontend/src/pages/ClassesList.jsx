@@ -18,7 +18,7 @@ export default function ClassesList() {
     try {
       const params = {};
       if (chairOnly) params.chair = true;
-      if (city) params.city = city;
+      if (city.trim()) params.city = city.trim().toLowerCase();
       if (category) params.category = category;
       const { data } = await api.get("/classes", { params });
       setItems(data);
