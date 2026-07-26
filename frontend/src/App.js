@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import Home from "@/pages/Home";
@@ -27,6 +27,7 @@ function App() {
             <Route path="/patient" element={<PatientSearch />} />
             <Route path="/patient/intervenant/:id" element={<IntervenantDetail />} />
             <Route path="/patient/callback/:id" element={<CallbackForm />} />
+            <Route path="/intervenant" element={<Navigate to="/intervenant/login" replace />} />
             <Route path="/intervenant/login" element={<Login mode="intervenant" />} />
             <Route path="/intervenant/register" element={<Register />} />
             <Route path="/intervenant/dashboard" element={<IntervenantDashboard />} />
