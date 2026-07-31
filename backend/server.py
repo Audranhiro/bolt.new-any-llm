@@ -127,10 +127,29 @@ class IntervenantProfileIn(BaseModel):
     bio: Optional[str] = ""
     lat: Optional[float] = None
     lng: Optional[float] = None
+    photo_url: Optional[str] = ""
+    intervention_radius_km: Optional[int] = Field(default=None, ge=0, le=250)
+    experience_years: Optional[int] = Field(default=None, ge=0, le=70)
+    experience_domains: List[str] = Field(default_factory=list)
+    accompaniment_types: List[str] = Field(default_factory=list)
+    accompaniment_formats: List[str] = Field(default_factory=list)
+    indicative_rate: Optional[str] = ""
+    payment_methods: List[str] = Field(default_factory=list)
+    estimated_wait_days: Optional[int] = Field(default=None, ge=0, le=365)
+    habitual_slots: List[str] = Field(default_factory=list)
+    individual_places_available: Optional[int] = Field(default=None, ge=0, le=10000)
+    collective_places_available: Optional[int] = Field(default=None, ge=0, le=10000)
+    availability_status: Optional[str] = None
 
 class AvailabilityIn(BaseModel):
     # dict: date(YYYY-MM-DD) -> {"morning": bool, "afternoon": bool}
     availability: Dict[str, Dict[str, bool]]
+    availability_status: str = "available"
+    estimated_wait_days: Optional[int] = Field(default=None, ge=0, le=365)
+    individual_places_available: Optional[int] = Field(default=None, ge=0, le=10000)
+    collective_places_available: Optional[int] = Field(default=None, ge=0, le=10000)
+
+AVAILABILITY_STATUSES = {"available", "waitlist", "unavailable"}
 
 class CallbackIn(BaseModel):
     intervenant_id: str
@@ -219,7 +238,9 @@ async def get_my_profile(user: dict = Depends(require_intervenant)):
 
 @api_router.put("/intervenants/me")
 async def update_my_profile(data: IntervenantProfileIn, user: dict = Depends(require_intervenant)):
-    update = data.model_dump()
+    update = data.model_dump(exclude_none=True)
+    if update.get("availability_status") and update["availability_status"] not in AVAILABILITY_STATUSES:
+        raise HTTPException(status_code=400, detail="Statut de disponibilité invalide")
     update["updated_at"] = now_utc().isoformat()
     await db.intervenants.update_one({"user_id": user["id"]}, {"$set": update})
     profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -228,6 +249,10 @@ async def update_my_profile(data: IntervenantProfileIn, user: dict = Depends(req
 @api_router.post("/intervenants/me/availability")
 async def set_availability(data: AvailabilityIn, user: dict = Depends(require_intervenant)):
     """Confirm availability for this week."""
+    if data.availability_status not in AVAILABILITY_STATUSES:
+        raise HTTPException(status_code=400, detail="Statut de disponibilité invalide")
+    if data.availability_status == "available" and not data.availability:
+        raise HTTPException(status_code=400, detail="Sélectionnez au moins un créneau disponible")
     week = monday_of_week()
     await db.intervenants.update_one(
         {"user_id": user["id"]},
@@ -236,6 +261,10 @@ async def set_availability(data: AvailabilityIn, user: dict = Depends(require_in
             "availability_week": week,
             "availability_confirmed_at": now_utc().isoformat(),
             "last_availability_update": now_utc().isoformat(),
+            "availability_status": data.availability_status,
+            "estimated_wait_days": data.estimated_wait_days,
+            "individual_places_available": data.individual_places_available,
+            "collective_places_available": data.collective_places_available,
         }}
     )
     profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -273,6 +302,7 @@ async def keep_availability(user: dict = Depends(require_intervenant)):
             "availability_week": week,
             "availability_confirmed_at": now_utc().isoformat(),
             "last_availability_update": now_utc().isoformat(),
+            "availability_status": "available" if new_av else "unavailable",
         }}
     )
     profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -285,9 +315,10 @@ async def mark_unavailable(user: dict = Depends(require_intervenant)):
         {"user_id": user["id"]},
         {"$set": {
             "availability": {},
-            "availability_week": "",
-            "availability_confirmed_at": None,
+            "availability_week": monday_of_week(),
+            "availability_confirmed_at": now_utc().isoformat(),
             "last_availability_update": now_utc().isoformat(),
+            "availability_status": "unavailable",
         }}
     )
     profile = await db.intervenants.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -295,7 +326,23 @@ async def mark_unavailable(user: dict = Depends(require_intervenant)):
 
 # ---------- Public endpoints ----------
 def is_available_this_week(profile: dict) -> bool:
-    return profile.get("availability_week") == monday_of_week() and bool(profile.get("availability"))
+    return (
+        profile.get("availability_status", "available") == "available"
+        and profile.get("availability_week") == monday_of_week()
+        and bool(profile.get("availability"))
+    )
+
+def availability_is_recent(profile: dict, max_days: int = 8) -> bool:
+    raw = profile.get("availability_confirmed_at")
+    if not raw:
+        return False
+    try:
+        confirmed_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if confirmed_at.tzinfo is None:
+            confirmed_at = confirmed_at.replace(tzinfo=timezone.utc)
+        return now_utc() - confirmed_at <= timedelta(days=max_days)
+    except (TypeError, ValueError):
+        return False
 
 def is_available_today(profile: dict) -> bool:
     if not is_available_this_week(profile):
@@ -325,6 +372,20 @@ def public_intervenant(profile: dict) -> dict:
         "lat": profile.get("lat"),
         "lng": profile.get("lng"),
         "bio": profile.get("bio", ""),
+        "photo_url": profile.get("photo_url", ""),
+        "intervention_radius_km": profile.get("intervention_radius_km"),
+        "experience_years": profile.get("experience_years"),
+        "experience_domains": profile.get("experience_domains", []),
+        "accompaniment_types": profile.get("accompaniment_types", []),
+        "accompaniment_formats": profile.get("accompaniment_formats", []),
+        "indicative_rate": profile.get("indicative_rate", ""),
+        "payment_methods": profile.get("payment_methods", []),
+        "estimated_wait_days": profile.get("estimated_wait_days"),
+        "habitual_slots": profile.get("habitual_slots", []),
+        "individual_places_available": profile.get("individual_places_available"),
+        "collective_places_available": profile.get("collective_places_available"),
+        "availability_status": profile.get("availability_status", "available" if is_available_this_week(profile) else "unavailable"),
+        "availability_recent": availability_is_recent(profile),
     }
 
 @api_router.get("/intervenants")

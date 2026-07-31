@@ -11,6 +11,16 @@ const FILTERS = [
   { key: "verified", label: "Diplôme vérifié" },
 ];
 
+function sortIntervenants(data) {
+  return [...data].sort((a, b) => {
+    const recentAvailableA = Number(Boolean((a.availability_recent ?? a.available_this_week) && (a.availability_status ?? "available") === "available"));
+    const recentAvailableB = Number(Boolean((b.availability_recent ?? b.available_this_week) && (b.availability_status ?? "available") === "available"));
+    if (recentAvailableA !== recentAvailableB) return recentAvailableB - recentAvailableA;
+    if (Boolean(a.diploma_verified) !== Boolean(b.diploma_verified)) return Number(b.diploma_verified) - Number(a.diploma_verified);
+    return (a.estimated_wait_days ?? 9999) - (b.estimated_wait_days ?? 9999);
+  });
+}
+
 export default function PatientSearch() {
   const [city, setCity] = useState("");
   const [filters, setFilters] = useState({ available_today: false, available_week: false, home: false, verified: false });
@@ -18,22 +28,32 @@ export default function PatientSearch() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState("list"); // mobile toggle: list/map
 
-  async function search() {
+  async function search(activeFilters = filters) {
     setLoading(true);
     try {
-      const params = { ...filters };
+      const params = { ...activeFilters };
       if (city) params.city = city;
       const { data } = await api.get("/intervenants", { params });
-      setList(data);
+      setList(sortIntervenants(data));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { search(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    api.get("/intervenants")
+      .then(({ data }) => { if (active) setList(sortIntervenants(data)); })
+      .catch(() => { if (active) setList([]); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   function toggle(key) {
-    setFilters((f) => ({ ...f, [key]: !f[key] }));
+    const next = { ...filters, [key]: !filters[key] };
+    setFilters(next);
+    search(next);
   }
 
   return (
@@ -73,7 +93,7 @@ export default function PatientSearch() {
         {FILTERS.map((f) => (
           <button
             key={f.key}
-            onClick={() => { toggle(f.key); setTimeout(search, 0); }}
+            onClick={() => toggle(f.key)}
             data-testid={`filter-${f.key}`}
             className={`px-4 py-2 rounded-full border-2 text-base font-medium transition-colors ${
               filters[f.key]
@@ -106,6 +126,9 @@ export default function PatientSearch() {
 
       <p className="mt-6 text-sm text-[#4B5563] italic" data-testid="disclaimer-text">
         Disponibilités déclarées par l'intervenant, à confirmer lors de la prise de contact.
+      </p>
+      <p className="mt-2 text-sm text-[#4B5563]">
+        Ordre des résultats : disponibilité récemment confirmée, diplôme vérifié puis délai estimé. Aucun classement commercial.
       </p>
 
       {/* Content */}

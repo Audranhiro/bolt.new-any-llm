@@ -12,7 +12,12 @@ const PLACES = [
   { key: "cabinet", label: "Cabinet" },
   { key: "salle", label: "Salle de sport" },
   { key: "exterieur", label: "Extérieur" },
+  { key: "visioconference", label: "Visioconférence" },
 ];
+const EXPERIENCE_DOMAINS = ["Reprise progressive", "Maintien de l'autonomie", "Prévention des chutes", "Activité sur chaise", "Lutte contre la sédentarité"];
+const ACCOMPANIMENT_TYPES = ["Remise en mouvement", "Renforcement adapté", "Mobilité et équilibre", "Endurance adaptée"];
+const FORMATS = ["Individuel", "Collectif"];
+const PAYMENT_METHODS = ["Carte bancaire", "Chèque", "Espèces", "Virement", "Aide financière déclarée"];
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 function mondayIso() {
@@ -65,6 +70,10 @@ export default function IntervenantDashboard() {
     const has = profile.intervention_places.includes(p);
     setField("intervention_places", has ? profile.intervention_places.filter((x) => x !== p) : [...profile.intervention_places, p]);
   }
+  function toggleList(field, value) {
+    const values = profile[field] || [];
+    setField(field, values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+  }
   function toggleSlot(date, slot) {
     const av = { ...(profile.availability || {}) };
     const cur = av[date] || { morning: false, afternoon: false };
@@ -88,6 +97,19 @@ export default function IntervenantDashboard() {
         bio: profile.bio || "",
         lat: profile.lat || null,
         lng: profile.lng || null,
+        photo_url: profile.photo_url || "",
+        intervention_radius_km: profile.intervention_radius_km ?? null,
+        experience_years: profile.experience_years ?? null,
+        experience_domains: profile.experience_domains || [],
+        accompaniment_types: profile.accompaniment_types || [],
+        accompaniment_formats: profile.accompaniment_formats || [],
+        indicative_rate: profile.indicative_rate || "",
+        payment_methods: profile.payment_methods || [],
+        estimated_wait_days: profile.estimated_wait_days ?? null,
+        habitual_slots: profile.habitual_slots || [],
+        individual_places_available: profile.individual_places_available ?? null,
+        collective_places_available: profile.collective_places_available ?? null,
+        availability_status: profile.availability_status || (profile.availability_week === week ? "available" : "unavailable"),
       };
       const { data } = await api.put("/intervenants/me", payload);
       setProfile(data);
@@ -98,7 +120,13 @@ export default function IntervenantDashboard() {
   async function confirmAvailability() {
     setSaving(true); setMsg(""); setErr("");
     try {
-      const { data } = await api.post("/intervenants/me/availability", { availability: profile.availability || {} });
+      const { data } = await api.post("/intervenants/me/availability", {
+        availability: profile.availability || {},
+        availability_status: profile.availability_status || "available",
+        estimated_wait_days: profile.estimated_wait_days ?? null,
+        individual_places_available: profile.individual_places_available ?? null,
+        collective_places_available: profile.collective_places_available ?? null,
+      });
       setProfile(data);
       setMsg("Disponibilités confirmées pour cette semaine.");
     } catch (e) { setErr(formatApiError(e)); } finally { setSaving(false); }
@@ -137,11 +165,21 @@ export default function IntervenantDashboard() {
           <Labeled label="Nom"><input data-testid="prof-last-name" className={inputCls} value={profile.last_name || ""} onChange={(e) => setField("last_name", e.target.value)} /></Labeled>
           <Labeled label="Ville"><input data-testid="prof-city" className={inputCls} value={profile.city || ""} onChange={(e) => setField("city", e.target.value)} /></Labeled>
           <Labeled label="Zone d'intervention"><input data-testid="prof-zone" className={inputCls} value={profile.zone || ""} onChange={(e) => setField("zone", e.target.value)} /></Labeled>
+          <Labeled label="Rayon d'intervention (km)"><input type="number" min="0" max="250" className={inputCls} value={profile.intervention_radius_km ?? ""} onChange={(e) => setField("intervention_radius_km", e.target.value ? Number(e.target.value) : null)} /></Labeled>
           <Labeled label="Diplôme"><input data-testid="prof-diploma" className={inputCls} value={profile.diploma || ""} onChange={(e) => setField("diploma", e.target.value)} /></Labeled>
+          <Labeled label="Années d'expérience déclarées"><input type="number" min="0" max="70" className={inputCls} value={profile.experience_years ?? ""} onChange={(e) => setField("experience_years", e.target.value ? Number(e.target.value) : null)} /></Labeled>
           <Labeled label="Téléphone"><input data-testid="prof-phone" className={inputCls} value={profile.phone || ""} onChange={(e) => setField("phone", e.target.value)} /></Labeled>
+          <Labeled label="Tarifs indicatifs"><input className={inputCls} placeholder="Ex. 45 € la séance, sur devis" value={profile.indicative_rate || ""} onChange={(e) => setField("indicative_rate", e.target.value)} /></Labeled>
+          <Labeled label="URL de la photo professionnelle"><input type="url" className={inputCls} placeholder="https://..." value={profile.photo_url || ""} onChange={(e) => setField("photo_url", e.target.value)} /></Labeled>
+          <Labeled label="Créneaux habituels"><input className={inputCls} placeholder="Ex. mardi matin, jeudi après-midi" value={(profile.habitual_slots || []).join(", ")} onChange={(e) => setField("habitual_slots", e.target.value.split(",").map((value) => value.trim()).filter(Boolean))} /></Labeled>
           <Labeled label="Latitude"><input data-testid="prof-lat" type="number" step="0.0001" className={inputCls} value={profile.lat ?? ""} onChange={(e) => setField("lat", e.target.value ? parseFloat(e.target.value) : null)} /></Labeled>
           <Labeled label="Longitude"><input data-testid="prof-lng" type="number" step="0.0001" className={inputCls} value={profile.lng ?? ""} onChange={(e) => setField("lng", e.target.value ? parseFloat(e.target.value) : null)} /></Labeled>
         </div>
+
+        <ChoiceGroup title="Domaines d'expérience déclarés" values={EXPERIENCE_DOMAINS} selected={profile.experience_domains || []} onToggle={(value) => toggleList("experience_domains", value)} />
+        <ChoiceGroup title="Types d'accompagnement" values={ACCOMPANIMENT_TYPES} selected={profile.accompaniment_types || []} onToggle={(value) => toggleList("accompaniment_types", value)} />
+        <ChoiceGroup title="Formats" values={FORMATS} selected={profile.accompaniment_formats || []} onToggle={(value) => toggleList("accompaniment_formats", value)} />
+        <ChoiceGroup title="Moyens de paiement ou financements déclarés" values={PAYMENT_METHODS} selected={profile.payment_methods || []} onToggle={(value) => toggleList("payment_methods", value)} />
         <Labeled label="Présentation" className="mt-4">
           <textarea rows={3} className={`${inputCls} py-3`} data-testid="prof-bio" value={profile.bio || ""} onChange={(e) => setField("bio", e.target.value)} />
         </Labeled>
@@ -189,6 +227,19 @@ export default function IntervenantDashboard() {
           <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${confirmed ? "bg-[#2D6A4F] text-white" : "bg-[#B85042] text-white"}`} data-testid="availability-status">
             {confirmed ? <><Check className="w-4 h-4" /> Actif</> : <><X className="w-4 h-4" /> Non visible</>}
           </span>
+        </div>
+
+        <div className="mt-5 grid md:grid-cols-4 gap-4">
+          <Labeled label="Statut">
+            <select className={inputCls} value={profile.availability_status || "unavailable"} onChange={(e) => setField("availability_status", e.target.value)}>
+              <option value="available">Disponible actuellement</option>
+              <option value="waitlist">Liste d'attente</option>
+              <option value="unavailable">Indisponible</option>
+            </select>
+          </Labeled>
+          <Labeled label="Délai estimé (jours)"><input type="number" min="0" className={inputCls} value={profile.estimated_wait_days ?? ""} onChange={(e) => setField("estimated_wait_days", e.target.value ? Number(e.target.value) : null)} /></Labeled>
+          <Labeled label="Places individuelles"><input type="number" min="0" className={inputCls} value={profile.individual_places_available ?? ""} onChange={(e) => setField("individual_places_available", e.target.value ? Number(e.target.value) : null)} /></Labeled>
+          <Labeled label="Places collectives"><input type="number" min="0" className={inputCls} value={profile.collective_places_available ?? ""} onChange={(e) => setField("collective_places_available", e.target.value ? Number(e.target.value) : null)} /></Labeled>
         </div>
 
         <div className="mt-4 overflow-x-auto">
@@ -321,5 +372,20 @@ function Labeled({ label, children, className = "" }) {
       <div className="text-base font-semibold text-[#1C1917] mb-2">{label}</div>
       {children}
     </label>
+  );
+}
+
+function ChoiceGroup({ title, values, selected, onToggle }) {
+  return (
+    <div className="mt-5">
+      <div className="text-base font-semibold mb-2">{title}</div>
+      <div className="flex flex-wrap gap-2">
+        {values.map((value) => (
+          <button key={value} type="button" aria-pressed={selected.includes(value)} onClick={() => onToggle(value)} className={`px-4 py-2 rounded-full border-2 text-base ${selected.includes(value) ? "bg-[#2D6A4F] text-white border-[#2D6A4F]" : "bg-white border-[#E5E7EB]"}`}>
+            {value}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -170,10 +170,18 @@ class TestIntervenantSelf:
             "zone": "Centre", "diploma": "Master APA",
             "publics": ["Seniors"], "intervention_places": ["domicile", "cabinet"],
             "phone": "0600000000", "bio": "Bio test", "lat": 49.4432, "lng": 1.0993,
+            "intervention_radius_km": 20, "experience_years": 4,
+            "experience_domains": ["Maintien de l'autonomie"],
+            "accompaniment_types": ["Mobilité et équilibre"],
+            "accompaniment_formats": ["Individuel", "Collectif"],
+            "indicative_rate": "Sur devis", "payment_methods": ["Chèque"],
+            "estimated_wait_days": 7, "individual_places_available": 2,
+            "collective_places_available": 5,
         }
         r = requests.put(f"{API}/intervenants/me", headers=auth(intervenant_token), json=payload)
         assert r.status_code == 200
         assert r.json()["city"] == "Rouen"
+        assert r.json()["intervention_radius_km"] == 20
         # GET to verify persistence
         g = requests.get(f"{API}/intervenants/me", headers=auth(intervenant_token))
         assert g.json()["city"] == "Rouen"
@@ -183,10 +191,17 @@ class TestIntervenantSelf:
         today = date.today().isoformat()
         r = requests.post(f"{API}/intervenants/me/availability",
                           headers=auth(intervenant_token),
-                          json={"availability": {today: {"morning": True, "afternoon": False}}})
+                          json={
+                              "availability": {today: {"morning": True, "afternoon": False}},
+                              "availability_status": "available",
+                              "estimated_wait_days": 7,
+                              "individual_places_available": 2,
+                              "collective_places_available": 5,
+                          })
         assert r.status_code == 200
         prof = r.json()
         assert prof["availability_week"] != ""
+        assert prof["availability_status"] == "available"
         # Find self via public list
         l = requests.get(f"{API}/intervenants", params={"available_today": "true"}).json()
         assert any(x["id"] == prof["id"] for x in l)
@@ -199,6 +214,8 @@ class TestIntervenantSelf:
         r = requests.post(f"{API}/intervenants/me/unavailable", headers=auth(intervenant_token))
         assert r.status_code == 200
         assert r.json()["availability"] == {}
+        assert r.json()["availability_status"] == "unavailable"
+        assert r.json()["availability_confirmed_at"] is not None
 
     def test_unauth_blocks(self, session):
         r = requests.get(f"{API}/intervenants/me")
