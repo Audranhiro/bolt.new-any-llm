@@ -1,0 +1,25 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - apa_connect_mongo:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+    depends_on:
+      - mongo
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  apa_connect_mongo:

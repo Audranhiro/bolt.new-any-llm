@@ -1,5 +1,5 @@
 {
-  "summary": "Backend: 29/29 pytest tests PASSED covering auth, intervenants CRUD, availability flows (set/keep/unavailable), callbacks, admin moderation. Sophie Martin confirmed available_today=true and 5 seeded intervenants visible. Frontend: Home loads with both CTAs, /patient page renders map + list + filters + disclaimer 'Disponibilités déclarées par l'intervenant', Sophie/Lucas/Camille/Julien/Emma all visible with availability badges. Admin login (admin@apaconnect.fr/admin123) redirects to /admin dashboard showing all 6 intervenants with Validate/Hide actions. Intervenant register/login pages render correctly.",
+  "summary": "Backend: 29/29 pytest tests PASSED lors de cette ancienne itération, avec des identifiants de test désormais révoqués et retirés du dépôt. Le rapport historique couvrait l'authentification, les intervenants, les disponibilités, les rappels et la modération. Frontend : accueil, recherche patient, carte, filtres et tableaux de bord vérifiés à cette date.",
   "backend_issues": {
     "critical": [],
     "minor": []
@@ -33,7 +33,7 @@
     "backend": "100%",
     "frontend": "100%"
   },
-  "test_credentials": "admin@apaconnect.fr / admin123 (admin); test intervenants registered dynamically with TEST_intervenant_<uuid>@apaconnect.fr / Test1234!",
+  "test_credentials": "Identifiants historiques retirés. Les tests doivent recevoir leurs valeurs par variables d'environnement.",
   "seed_data_creation": "Tests register fresh TEST_-prefixed intervenants each run; 5 fake Rouen intervenants are auto-seeded by backend on startup.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

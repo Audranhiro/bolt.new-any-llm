@@ -16,14 +16,19 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Respons
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
+try:
+    from backend.config import Settings
+except ModuleNotFoundError:
+    # Compatibilité avec les environnements existants lancés depuis backend/.
+    from config import Settings
 
 # ---------- Config ----------
 JWT_ALGORITHM = "HS256"
-JWT_SECRET = os.environ["JWT_SECRET"]
+settings = Settings.from_env()
+JWT_SECRET = settings.jwt_secret
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+client = AsyncIOMotorClient(settings.mongo_url)
+db = client[settings.db_name]
 
 app = FastAPI(title="APA Connect API")
 api_router = APIRouter(prefix="/api")
@@ -93,7 +98,10 @@ async def require_intervenant(user: dict = Depends(get_current_user)) -> dict:
 def set_auth_cookie(response: Response, token: str):
     response.set_cookie(
         key="access_token", value=token, httponly=True,
-        secure=True, samesite="none", max_age=604800, path="/"
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        max_age=604800,
+        path="/",
     )
 
 # ---------- Models ----------
@@ -924,8 +932,10 @@ async def root():
 
 # ---------- Seed ----------
 async def seed_admin():
-    email = os.environ.get("ADMIN_EMAIL", "admin@apaconnect.fr")
-    password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    if not settings.enable_admin_seed:
+        return
+    email = settings.admin_email
+    password = settings.admin_password
     existing = await db.users.find_one({"email": email})
     if not existing:
         await db.users.insert_one({
@@ -941,6 +951,8 @@ async def seed_admin():
         logger.info("Admin password updated")
 
 async def seed_fake_intervenants():
+    if not settings.enable_demo_seed:
+        return
     if await db.intervenants.count_documents({"seed": True}) > 0:
         return
     rouen_base = [
@@ -1012,6 +1024,7 @@ async def seed_fake_intervenants():
             "lng": lng,
             "created_at": now_utc().isoformat(),
             "seed": True,
+            "data_scope": "demo",
         }
         await db.intervenants.insert_one(doc)
     logger.info("Seeded 5 fake intervenants around Rouen")
@@ -1040,8 +1053,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_origin_regex=".*",
+    allow_origins=list(settings.cors_allowed_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

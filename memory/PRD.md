@@ -21,7 +21,7 @@ Application web mobile responsive pour mettre en relation patients et intervenan
 - Intervenant APIs: get/update self, set availability, keep same, mark unavailable
 - Admin APIs: list all, validate diploma, toggle hidden, list callbacks
 - Frontend pages: Home, PatientSearch (map+list), IntervenantDetail, CallbackForm, Login, Register, IntervenantDashboard, AdminDashboard
-- Seed: admin@apaconnect.fr/admin123 + 5 Rouen intervenants (Sophie available today)
+- Ancien seed administrateur supprimé ; les données de démonstration sont désormais optionnelles et isolées
 - Regulatory disclaimer displayed on search, detail, and callback pages
 - Medical-data warning on callback form
 

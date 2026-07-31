@@ -1,5 +1,6 @@
 """APA Connect backend tests - auth, intervenants, callbacks, admin."""
 import os
+import secrets
 import uuid
 import pytest
 import requests
@@ -16,8 +17,8 @@ if "REACT_APP_BACKEND_URL" not in os.environ:
         pass
 
 API = f"{BASE_URL}/api"
-ADMIN_EMAIL = "admin@apaconnect.fr"
-ADMIN_PASSWORD = "admin123"
+ADMIN_EMAIL = os.environ.get("APA_TEST_ADMIN_EMAIL")
+ADMIN_PASSWORD = os.environ.get("APA_TEST_ADMIN_PASSWORD")
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +28,10 @@ def session():
 
 @pytest.fixture(scope="module")
 def admin_token(session):
+    if not ADMIN_EMAIL or not ADMIN_PASSWORD:
+        pytest.skip(
+            "Définir APA_TEST_ADMIN_EMAIL et APA_TEST_ADMIN_PASSWORD pour les tests admin."
+        )
     r = session.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
     assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
     data = r.json()
@@ -40,7 +45,7 @@ def intervenant_creds():
     suffix = uuid.uuid4().hex[:8]
     return {
         "email": f"TEST_intervenant_{suffix}@apaconnect.fr",
-        "password": "Test1234!",
+        "password": secrets.token_urlsafe(18),
         "first_name": "TestFn",
         "last_name": "TestLn",
     }
@@ -121,6 +126,8 @@ class TestAuth:
         assert admin_token
 
     def test_login_wrong_password(self, session):
+        if not ADMIN_EMAIL:
+            pytest.skip("Définir APA_TEST_ADMIN_EMAIL pour ce test.")
         r = session.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": "wrong"})
         assert r.status_code == 401
 
