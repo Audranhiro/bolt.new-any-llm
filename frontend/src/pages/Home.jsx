@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Search, UserCog, HeartHandshake, ShieldCheck, Map, FileText , Armchair } from "lucide-react";
+import { Search, UserCog, HeartHandshake, ShieldCheck, Map, FileText, Armchair, Building2, ArrowRight, PlayCircle } from "lucide-react";
 
 export default function Home() {
   return (
@@ -82,6 +82,34 @@ export default function Home() {
               <div className="text-sm text-[#4B5563]">5 modèles administratifs prêts à copier</div>
             </div>
           </Link>
+        </div>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-5 md:px-10 pb-10" aria-labelledby="msp-home-title">
+        <div className="relative overflow-hidden rounded-3xl bg-[#173F35] text-white p-7 md:p-10">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#74A57F]/25" />
+          <div className="relative">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold">
+              <Building2 className="h-4 w-4" /> Maisons de santé et professionnels de santé
+            </span>
+            <h2 id="msp-home-title" className="mt-5 max-w-3xl text-3xl md:text-4xl font-heading font-bold leading-tight">
+              Orientez un patient vers un professionnel APA vérifié et disponible.
+            </h2>
+            <p className="mt-4 max-w-3xl text-lg text-white/85">
+              En moins de deux minutes, transmettez un lien au patient puis suivez si sa prise en charge a réellement commencé.
+            </p>
+            <div className="mt-7 flex flex-col sm:flex-row flex-wrap gap-3">
+              <Link to="/msp" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-bold text-[#173F35] hover:bg-[#F2F5F3]" data-testid="home-msp-discover">
+                Découvrir APA Connect pour les MSP <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/msp/demonstration" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-white/40 px-5 py-3 font-bold text-white hover:bg-white/10" data-testid="home-msp-demo">
+                <PlayCircle className="h-5 w-5" /> Voir la démonstration
+              </Link>
+              <Link to="/msp#pilote" className="inline-flex min-h-12 items-center justify-center rounded-xl px-5 py-3 font-bold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white" data-testid="home-msp-pilot">
+                Demander un pilote
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 

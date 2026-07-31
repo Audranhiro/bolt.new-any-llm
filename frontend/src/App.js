@@ -14,6 +14,8 @@ import KitDocuments from "@/pages/KitDocuments";
 import ClassesList from "@/pages/ClassesList";
 import VideosList from "@/pages/VideosList";
 import StructuresList from "@/pages/StructuresList";
+import MSPForOrganizations from "@/pages/MSPForOrganizations";
+import MSPDemo from "@/pages/MSPDemo";
 import { Toaster } from "sonner";
 
 function App() {
@@ -37,6 +39,8 @@ function App() {
             <Route path="/cours" element={<ClassesList />} />
             <Route path="/videos" element={<VideosList />} />
             <Route path="/structures" element={<StructuresList />} />
+            <Route path="/msp" element={<MSPForOrganizations />} />
+            <Route path="/msp/demonstration" element={<MSPDemo />} />
           </Routes>
           <Toaster position="top-center" />
         </BrowserRouter>

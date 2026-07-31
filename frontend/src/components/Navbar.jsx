@@ -20,6 +20,9 @@ export default function Navbar() {
         </Link>
 
         <nav className="flex items-center gap-3">
+          <Link to="/msp" className="hidden xl:inline text-base font-semibold text-[#2D6A4F] hover:text-[#1B4332]" data-testid="nav-msp">
+            Pour les MSP
+          </Link>
           <Link to="/cours" className="hidden md:inline text-base font-medium text-[#1C1917] hover:text-[#2D6A4F]" data-testid="nav-cours">
             Cours sur chaise
           </Link>
