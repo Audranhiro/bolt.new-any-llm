@@ -62,6 +62,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
+    "postbuild": "node scripts/generate-static-routes.js",
     "test": "craco test"
   },
   "browserslist": {

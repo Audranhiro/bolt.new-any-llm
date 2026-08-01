@@ -44,9 +44,6 @@ jobs:
           REACT_APP_BACKEND_URL: https://intervenant-rouen.emergent.host
         run: yarn install --frozen-lockfile && yarn build
 
-      - name: Add React route fallback
-        run: cp frontend/build/index.html frontend/build/404.html
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
