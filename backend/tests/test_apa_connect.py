@@ -5,16 +5,11 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://intervenant-rouen.preview.emergentagent.com").rstrip("/")
-# Read frontend .env if env var not set in this process
-if "REACT_APP_BACKEND_URL" not in os.environ:
-    try:
-        with open("/app/frontend/.env") as f:
-            for line in f:
-                if line.startswith("REACT_APP_BACKEND_URL="):
-                    BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
-    except Exception:
-        pass
+BASE_URL = os.environ.get("APA_TEST_BASE_URL", "").rstrip("/")
+if not BASE_URL:
+    pytestmark = pytest.mark.skip(
+        reason="Définir APA_TEST_BASE_URL pour exécuter les tests d'intégration explicites."
+    )
 
 API = f"{BASE_URL}/api"
 ADMIN_EMAIL = os.environ.get("APA_TEST_ADMIN_EMAIL")
@@ -64,6 +59,11 @@ def auth(token):
 
 # -------- Health & Public --------
 class TestPublic:
+    def test_health(self, session):
+        r = session.get(f"{API}/health")
+        assert r.status_code == 200
+        assert r.json() == {"status": "ok", "database": "connected"}
+
     def test_root(self, session):
         r = session.get(f"{API}/")
         assert r.status_code == 200

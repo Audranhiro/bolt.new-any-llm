@@ -991,6 +991,21 @@ async def list_structure_classes(structure_id: str):
 async def root():
     return {"app": "APA Connect", "ok": True}
 
+
+@api_router.get("/health", tags=["operations"])
+async def health():
+    """Readiness check used by the hosting platform.
+
+    The response deliberately exposes no database address, credentials or
+    internal exception details.
+    """
+    try:
+        await db.command("ping")
+    except Exception:
+        logger.warning("Database health check failed")
+        raise HTTPException(status_code=503, detail="Service temporairement indisponible")
+    return {"status": "ok", "database": "connected"}
+
 # ---------- Seed ----------
 async def seed_admin():
     if not settings.enable_admin_seed:
