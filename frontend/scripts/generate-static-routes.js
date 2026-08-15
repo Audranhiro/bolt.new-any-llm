@@ -9,6 +9,8 @@ const staticRoutes = [
   "intervenant",
   "intervenant/login",
   "intervenant/register",
+  "intervenant/forgot-password",
+  "intervenant/reset-password",
   "intervenant/dashboard",
   "admin",
   "admin/login",

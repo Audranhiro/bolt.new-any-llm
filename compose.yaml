@@ -1,4 +1,17 @@
 services:
+  postgres:
+    image: postgres:16
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: apa_connect_dev
+      POSTGRES_USER: apa_connect
+      POSTGRES_PASSWORD: local-only
+    volumes:
+      - apa_connect_postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+
   mongo:
     image: mongo:7
     restart: unless-stopped
@@ -23,3 +36,4 @@ services:
 
 volumes:
   apa_connect_mongo:
+  apa_connect_postgres:

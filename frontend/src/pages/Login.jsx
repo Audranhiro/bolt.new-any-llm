@@ -41,6 +41,15 @@ export default function Login({ mode = "intervenant" }) {
           <label className="block">
             <div className="text-base font-semibold mb-2">Mot de passe</div>
             <input type="password" data-testid="login-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} required />
+            <div className="text-right mt-2">
+              <Link
+                to="/intervenant/forgot-password"
+                className="text-[#2D6A4F] font-semibold"
+                data-testid="forgot-password-link"
+              >
+                Mot de passe oubliÃ© ?
+              </Link>
+            </div>
           </label>
           {err && <div className="text-[#B85042] font-semibold text-base" data-testid="login-error">{err}</div>}
           <button disabled={loading} data-testid="login-submit" className="w-full min-h-[56px] bg-[#2D6A4F] hover:bg-[#1B4332] disabled:opacity-60 text-white rounded-2xl font-semibold text-lg">

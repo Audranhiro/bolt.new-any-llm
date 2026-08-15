@@ -8,6 +8,8 @@ import IntervenantDetail from "@/pages/IntervenantDetail";
 import CallbackForm from "@/pages/CallbackForm";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import IntervenantDashboard from "@/pages/IntervenantDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
 import KitDocuments from "@/pages/KitDocuments";
@@ -32,6 +34,8 @@ function App() {
             <Route path="/intervenant" element={<Navigate to="/intervenant/login" replace />} />
             <Route path="/intervenant/login" element={<Login mode="intervenant" />} />
             <Route path="/intervenant/register" element={<Register />} />
+            <Route path="/intervenant/forgot-password" element={<ForgotPassword />} />
+            <Route path="/intervenant/reset-password" element={<ResetPassword />} />
             <Route path="/intervenant/dashboard" element={<IntervenantDashboard />} />
             <Route path="/admin/login" element={<Login mode="admin" />} />
             <Route path="/admin" element={<AdminDashboard />} />
