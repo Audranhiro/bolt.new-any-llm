@@ -38,7 +38,7 @@ export default function ResetPassword() {
         <section className="w-full max-w-md bg-white border-2 border-[#E5E7EB] rounded-2xl p-6 md:p-8">
           <h1 className="font-heading font-bold text-3xl">Lien invalide</h1>
           <p className="mt-3 text-[#4B5563]">
-            Demandez un nouveau lien de rÃ©initialisation.
+            Demandez un nouveau lien de réinitialisation.
           </p>
           <Link
             to="/intervenant/forgot-password"
@@ -58,7 +58,7 @@ export default function ResetPassword() {
           Nouveau mot de passe
         </h1>
         <p className="text-[#4B5563] mt-2">
-          Choisissez au minimum 12 caractÃ¨res.
+          Choisissez au minimum 12 caractères.
         </p>
 
         <form onSubmit={submit} className="mt-6 space-y-5">

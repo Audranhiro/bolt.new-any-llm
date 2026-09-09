@@ -47,7 +47,7 @@ export default function Login({ mode = "intervenant" }) {
                 className="text-[#2D6A4F] font-semibold"
                 data-testid="forgot-password-link"
               >
-                Mot de passe oubliÃ© ?
+                Mot de passe oublié ?
               </Link>
             </div>
           </label>

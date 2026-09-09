@@ -27,7 +27,7 @@ export default function ForgotPassword() {
     <main className="min-h-[calc(100vh-81px)] flex items-center justify-center px-4 py-10">
       <section className="w-full max-w-md bg-white border-2 border-[#E5E7EB] rounded-2xl p-6 md:p-8">
         <h1 className="font-heading font-bold text-3xl text-[#1C1917]">
-          Mot de passe oubliÃ©
+          Mot de passe oublié
         </h1>
         <p className="text-[#4B5563] mt-2">
           Indiquez votre email. Si un compte correspond, vous recevrez un lien
@@ -67,7 +67,7 @@ export default function ForgotPassword() {
 
         <p className="text-center mt-6">
           <Link to="/intervenant/login" className="text-[#2D6A4F] font-semibold">
-            Retour Ã  la connexion
+            Retour à la connexion
           </Link>
         </p>
       </section>
