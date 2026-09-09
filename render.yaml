@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: apa-connect-api-staging
+    runtime: python
+    repo: https://github.com/Audranhiro/bolt.new-any-llm.git
+    branch: conflict_110526_2151
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: apa_connect_staging
+      - key: SQL_BACKEND_ENABLED
+        value: "false"
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://apaconnect.fr,https://www.apaconnect.fr
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: ENABLE_ADMIN_SEED
+        value: "false"
+      - key: ENABLE_DEMO_SEED
+        value: "false"
+      - key: EMAIL_DELIVERY_ENABLED
+        value: "false"
+      - key: FRONTEND_URL
+        value: https://apaconnect.fr
+      - key: PASSWORD_RESET_TTL_MINUTES
+        value: "30"

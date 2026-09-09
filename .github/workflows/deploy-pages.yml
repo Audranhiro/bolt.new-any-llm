@@ -41,7 +41,7 @@ jobs:
         working-directory: frontend
         env:
           CI: "false"
-          REACT_APP_BACKEND_URL: https://intervenant-rouen.emergent.host
+          REACT_APP_BACKEND_URL: https://apa-connect-api-staging.onrender.com
         run: yarn install --frozen-lockfile && yarn build
 
       - name: Upload Pages artifact
